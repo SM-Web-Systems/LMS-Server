@@ -1,0 +1,364 @@
+import { Response, NextFunction } from 'express';
+import path from 'path';
+import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
+import { query, queryOne, execute } from '../config/database.js';
+import { AuthRequest, CourseDocument, CourseDocumentResponse, User, ErrorCodes } from '../types/index.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { deleteFile, getDocumentFileUrl } from '../utils/fileUpload.js';
+
+// Default categories
+const DEFAULT_CATEGORIES = [
+  'Lecture Notes',
+  'Assignments',
+  'Study Guides',
+  'Reference Materials',
+  'Exam Preparation',
+  'Project Resources',
+  'Tutorials',
+  'Other',
+];
+
+// Helper to convert DB document to API response
+function toDocumentResponse(doc: CourseDocument & { uploader_name?: string }): CourseDocumentResponse {
+  return {
+    id: doc.id,
+    title: doc.title,
+    description: doc.description,
+    category: doc.category,
+    fileName: doc.file_name,
+    fileSize: doc.file_size,
+    fileUrl: getDocumentFileUrl(doc.id),
+    fileMimeType: doc.file_mime_type,
+    uploadedBy: doc.uploader_name || '',
+    uploadedById: doc.uploaded_by_id,
+    uploadedAt: doc.uploaded_at as unknown as string,
+    updatedAt: doc.updated_at as unknown as string,
+  };
+}
+
+export async function getDocuments(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const offset = (page - 1) * limit;
+    const category = req.query.category as string;
+    const search = req.query.search as string;
+
+    // Build query with filters
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (category) {
+      params.push(category);
+      conditions.push(`d.category = ?`);
+    }
+
+    if (search) {
+      params.push(`%${search}%`, `%${search}%`);
+      conditions.push(`(d.title LIKE ? OR d.description LIKE ?)`);
+    }
+
+    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    // Get total count
+    const countResult = queryOne<{ count: number }>(
+      `SELECT COUNT(*) as count FROM course_documents d ${whereClause}`,
+      params
+    );
+    const total = countResult?.count || 0;
+
+    // Get documents with uploader name
+    const documents = query<CourseDocument & { uploader_name: string }>(
+      `SELECT d.*, u.name as uploader_name
+       FROM course_documents d
+       LEFT JOIN users u ON d.uploaded_by_id = u.id
+       ${whereClause}
+       ORDER BY d.uploaded_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        documents: documents.map(toDocumentResponse),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getDocument(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    const document = queryOne<CourseDocument & { uploader_name: string }>(
+      `SELECT d.*, u.name as uploader_name
+       FROM course_documents d
+       LEFT JOIN users u ON d.uploaded_by_id = u.id
+       WHERE d.id = ?`,
+      [id]
+    );
+
+    if (!document) {
+      throw new AppError('Document not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    res.json({
+      success: true,
+      data: toDocumentResponse(document),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createDocument(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { title, description, category } = req.body;
+    const file = req.file;
+    const adminUserId = req.user?.userId;
+
+    // Validation
+    const errors: Array<{ field: string; message: string }> = [];
+
+    if (!title || title.trim().length === 0) {
+      errors.push({ field: 'title', message: 'Title is required' });
+    } else if (title.length > 200) {
+      errors.push({ field: 'title', message: 'Title must be 200 characters or less' });
+    }
+
+    if (!description || description.trim().length === 0) {
+      errors.push({ field: 'description', message: 'Description is required' });
+    } else if (description.length > 1000) {
+      errors.push({ field: 'description', message: 'Description must be 1000 characters or less' });
+    }
+
+    if (!category || category.trim().length === 0) {
+      errors.push({ field: 'category', message: 'Category is required' });
+    }
+
+    if (!file) {
+      errors.push({ field: 'file', message: 'File is required' });
+    }
+
+    if (errors.length > 0) {
+      if (file) deleteFile(file.path);
+      throw new AppError('Validation failed', 400, ErrorCodes.VALIDATION_ERROR, errors);
+    }
+
+    // Get admin user info
+    const adminUser = queryOne<User>(
+      'SELECT id, name FROM users WHERE id = ?',
+      [adminUserId]
+    );
+
+    // Create document
+    const id = uuidv4();
+    execute(
+      `INSERT INTO course_documents (id, title, description, category, file_name, file_size, file_path, file_mime_type, uploaded_by_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        title.trim(),
+        description.trim(),
+        category.trim(),
+        file!.originalname,
+        file!.size,
+        file!.path,
+        file!.mimetype,
+        adminUserId,
+      ]
+    );
+
+    const document = queryOne<CourseDocument>('SELECT * FROM course_documents WHERE id = ?', [id]);
+
+    if (!document) {
+      if (file) deleteFile(file.path);
+      throw new AppError('Failed to create document', 500, ErrorCodes.INTERNAL_ERROR);
+    }
+
+    res.status(201).json({
+      success: true,
+      data: toDocumentResponse({ ...document, uploader_name: adminUser?.name }),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateDocument(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { title, description, category } = req.body;
+
+    // Get existing document
+    const existing = queryOne<CourseDocument & { uploader_name: string }>(
+      `SELECT d.*, u.name as uploader_name
+       FROM course_documents d
+       LEFT JOIN users u ON d.uploaded_by_id = u.id
+       WHERE d.id = ?`,
+      [id]
+    );
+
+    if (!existing) {
+      throw new AppError('Document not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    // Validation
+    const errors: Array<{ field: string; message: string }> = [];
+
+    if (title !== undefined && title.length > 200) {
+      errors.push({ field: 'title', message: 'Title must be 200 characters or less' });
+    }
+
+    if (description !== undefined && description.length > 1000) {
+      errors.push({ field: 'description', message: 'Description must be 1000 characters or less' });
+    }
+
+    if (errors.length > 0) {
+      throw new AppError('Validation failed', 400, ErrorCodes.VALIDATION_ERROR, errors);
+    }
+
+    // Build update query
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (title !== undefined) {
+      updates.push(`title = ?`);
+      params.push(title.trim());
+    }
+    if (description !== undefined) {
+      updates.push(`description = ?`);
+      params.push(description.trim());
+    }
+    if (category !== undefined) {
+      updates.push(`category = ?`);
+      params.push(category.trim());
+    }
+
+    if (updates.length === 0) {
+      res.json({
+        success: true,
+        data: toDocumentResponse(existing),
+      });
+      return;
+    }
+
+    updates.push(`updated_at = datetime('now')`);
+    params.push(id);
+
+    execute(
+      `UPDATE course_documents SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    const document = queryOne<CourseDocument & { uploader_name: string }>(
+      `SELECT d.*, u.name as uploader_name
+       FROM course_documents d
+       LEFT JOIN users u ON d.uploaded_by_id = u.id
+       WHERE d.id = ?`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      data: toDocumentResponse(document!),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteDocument(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    // Get existing document
+    const existing = queryOne<CourseDocument>(
+      'SELECT * FROM course_documents WHERE id = ?',
+      [id]
+    );
+
+    if (!existing) {
+      throw new AppError('Document not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    // Delete file
+    deleteFile(existing.file_path);
+
+    // Delete document
+    execute('DELETE FROM course_documents WHERE id = ?', [id]);
+
+    res.json({
+      success: true,
+      message: 'Document deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function downloadDocument(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    const document = queryOne<CourseDocument>(
+      'SELECT * FROM course_documents WHERE id = ?',
+      [id]
+    );
+
+    if (!document) {
+      throw new AppError('Document not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(document.file_path)) {
+      throw new AppError('File not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    // Set headers and send file
+    res.setHeader('Content-Type', document.file_mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${document.file_name}"`);
+    res.setHeader('Content-Length', document.file_size);
+    res.sendFile(path.resolve(document.file_path));
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getCategories(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    // Get unique categories from database
+    const dbCategories = query<{ category: string }>(
+      'SELECT DISTINCT category FROM course_documents ORDER BY category'
+    );
+
+    // Merge with default categories
+    const categorySet = new Set(DEFAULT_CATEGORIES);
+    for (const row of dbCategories) {
+      categorySet.add(row.category);
+    }
+
+    // Sort alphabetically
+    const categories = Array.from(categorySet).sort();
+
+    res.json({
+      success: true,
+      data: {
+        categories,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
