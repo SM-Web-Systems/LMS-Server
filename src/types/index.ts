@@ -159,6 +159,55 @@ export interface CourseDocumentResponse {
   updatedAt?: string;
 }
 
+// Forum Types (BACKEND_UPDATE_REQUIREMENTS)
+export interface ForumAuthor {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface ForumTopicResponse {
+  id: string;
+  title: string;
+  body: string;
+  author: ForumAuthor;
+  createdAt: string;
+  updatedAt?: string;
+  postCount: number;
+  lastPostAt?: string | null;
+}
+
+export interface ForumPostResponse {
+  id: string;
+  topicId: string;
+  body: string;
+  author: ForumAuthor;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// Course API Types (BACKEND_UPDATE_REQUIREMENTS)
+export type CourseItem =
+  | { id: string; type: 'video'; title: string; order?: number; url: string }
+  | { id: string; type: 'link'; title: string; order?: number; url: string }
+  | { id: string; type: 'pdf'; title: string; order?: number; documentId?: string; fileUrl?: string };
+
+export interface CourseSection {
+  id: string;
+  title: string;
+  objective?: string;
+  outcome?: string;
+  items: CourseItem[];
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  description?: string;
+  sections: CourseSection[];
+}
+
 // Analytics Types
 export interface DashboardAnalytics {
   totalStudents: number;

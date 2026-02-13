@@ -1,10 +1,13 @@
 import { Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
 import { v4 as uuidv4 } from 'uuid';
-import { query, queryOne } from '../config/database.js';
+import { query, queryOne, execute } from '../config/database.js';
 import { generateToken } from '../config/jwt.js';
 import { AuthRequest, User, ErrorCodes, Student } from '../types/index.js';
 import { AppError } from '../middleware/errorHandler.js';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export async function login(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -42,6 +45,74 @@ export async function login(req: AuthRequest, res: Response, next: NextFunction)
     }
 
     // Generate JWT token
+    const token = generateToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      studentId,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function googleLogin(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id_token } = req.body;
+    if (!id_token) {
+      throw new AppError('id_token is required', 400, ErrorCodes.VALIDATION_ERROR);
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      throw new AppError('Google sign-in is not configured', 500, ErrorCodes.INTERNAL_ERROR);
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: id_token,
+      audience: clientId,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email) {
+      throw new AppError('Invalid Google token', 401, ErrorCodes.INVALID_CREDENTIALS);
+    }
+
+    const email = payload.email.toLowerCase();
+    const name = (payload.name || payload.email.split('@')[0] || 'User').trim();
+
+    let user = queryOne<User>('SELECT * FROM users WHERE email = ?', [email]);
+    if (!user) {
+      const id = uuidv4();
+      execute(
+        'INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+        [id, name, email, '', 'student']
+      );
+      user = queryOne<User>('SELECT * FROM users WHERE id = ?', [id]);
+    }
+
+    if (!user) {
+      throw new AppError('Could not find or create user', 500, ErrorCodes.INTERNAL_ERROR);
+    }
+
+    let studentId: string | undefined;
+    if (user.role === 'student') {
+      const student = queryOne<Student>('SELECT id FROM students WHERE user_id = ?', [user.id]);
+      studentId = student?.id;
+    }
+
     const token = generateToken({
       userId: user.id,
       email: user.email,

@@ -45,10 +45,17 @@ export async function getSubmissions(req: AuthRequest, res: Response, next: Next
     const conditions: string[] = [];
     const params: unknown[] = [];
 
-    // Students can only see their own submissions
+    // Students can only see their own submissions. If no student profile is linked yet, return empty list.
     if (!isAdmin) {
       if (!userStudentId) {
-        throw new AppError('Student profile not found', 403, ErrorCodes.FORBIDDEN);
+        res.json({
+          success: true,
+          data: {
+            submissions: [],
+            pagination: { page, limit, total: 0, totalPages: 0 },
+          },
+        });
+        return;
       }
       params.push(userStudentId);
       conditions.push(`s.student_id = ?`);

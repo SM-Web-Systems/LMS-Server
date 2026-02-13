@@ -54,6 +54,9 @@ A TypeScript/Express backend server for the KanyaCSI Student Management System. 
    JWT_SECRET=your-super-secret-key-change-this-in-production-min-32-chars
    JWT_EXPIRES_IN=24h
 
+   # Google Sign-In (optional; use same Client ID as frontend)
+   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+
    # File Upload Configuration
    MAX_FILE_SIZE=10485760
    UPLOAD_DIR=./uploads
@@ -63,10 +66,23 @@ A TypeScript/Express backend server for the KanyaCSI Student Management System. 
    ```
 
 4. **Initialize the database**
+
+   **Option A – SM Web Systems LMS (schema + seed two users)**  
+   If you use the schema from the `SM-Web-systems-LMS` repo and only need admin + student logins:
+
+   ```bash
+   # From server repo; DB path = DATABASE_PATH or ./data/student_ms.db
+   npm run db:schema    # run schema once (uses database/schema.sql in this repo)
+   npm run db:seed      # seed admin@smwebsystems.com and student@smwebsystems.com
+   ```
+
+   To use a different schema file: `SCHEMA_SQL_PATH=/path/to/schema.sql npm run db:schema`
+
+   **Option B – Full init (Kanya sample data)**  
    ```bash
    npm run db:init
    ```
-   This creates all tables and seeds sample data.
+   This creates all tables and seeds sample data (admin@kanya.edu, john@kanya.edu, etc.).
 
 ## Running the Server
 
@@ -118,15 +134,13 @@ npm start
 
 ## Test Credentials
 
-After running `npm run db:init`:
+**After `npm run db:schema` + `npm run db:seed` (SM Web Systems):**
+- **Admin:** `admin@smwebsystems.com` / `admin123`
+- **Student:** `student@smwebsystems.com` / `student123`
 
-**Admin:**
-- Email: `admin@kanya.edu`
-- Password: `admin123`
-
-**Students:**
-- Email: `john@kanya.edu`, `jane@kanya.edu`, `bob@kanya.edu`, `alice@kanya.edu`, `charlie@kanya.edu`
-- Password: `student123`
+**After `npm run db:init` (Kanya sample data):**
+- **Admin:** `admin@kanya.edu` / `admin123`
+- **Students:** `john@kanya.edu`, `jane@kanya.edu`, etc. / `student123`
 
 ## Project Structure
 

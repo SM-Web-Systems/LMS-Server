@@ -9,6 +9,8 @@ import studentsRoutes from './routes/students.js';
 import submissionsRoutes from './routes/submissions.js';
 import analyticsRoutes from './routes/analytics.js';
 import documentsRoutes from './routes/documents.js';
+import forumRoutes from './routes/forum.js';
+import coursesRoutes from './routes/courses.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -42,6 +44,8 @@ app.use('/api/v1/students', studentsRoutes);
 app.use('/api/v1/submissions', submissionsRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/documents', documentsRoutes);
+app.use('/api/v1/forum', forumRoutes);
+app.use('/api/v1/courses', coursesRoutes);
 
 // Error handling
 app.use(notFoundHandler);
