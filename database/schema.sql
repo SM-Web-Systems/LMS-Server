@@ -1,13 +1,14 @@
 -- SQLite schema for SM Web Systems LMS (run this in your server repo to fix "no such table: users")
 -- Run: npm run db:schema  (uses this file by default)
 
--- Users table (auth)
+-- Users table (auth); description = optional profile bio (Profile API)
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('student', 'admin')),
+  description TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -98,3 +99,23 @@ CREATE TABLE IF NOT EXISTS courses (
   description TEXT,
   sections TEXT NOT NULL DEFAULT '[]'
 );
+
+-- Messages API: 1:1 conversations (user1_id < user2_id for stable ordering)
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  user1_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user2_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_user1 ON conversations(user1_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_user2 ON conversations(user2_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON conversation_messages(conversation_id);

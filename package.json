@@ -11,7 +11,8 @@
     "db:schema": "tsx src/scripts/runSchema.ts",
     "db:seed": "tsx src/scripts/seedUsers.ts",
     "db:seed-courses": "tsx src/scripts/seedCourses.ts",
-    "db:migrate": "tsx src/scripts/migrateDocuments.ts"
+    "db:migrate": "tsx src/scripts/migrateDocuments.ts",
+    "db:migrate-profile": "tsx src/scripts/migrateProfile.ts"
   },
   "keywords": [
     "student",
