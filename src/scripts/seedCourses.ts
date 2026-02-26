@@ -16,6 +16,7 @@ const DUMMY_COURSES: Course[] = [
     id: ID('course-blockchain-basics'),
     title: 'Blockchain Basics (Week 1)',
     description: 'Prerequisite module: core concepts and terminology.',
+    courseCode: 'BLOCKCHAIN-101',
     sections: [
       {
         id: ID('sec-bc-day1'),
@@ -67,6 +68,7 @@ const DUMMY_COURSES: Course[] = [
     id: ID('course-solidity'),
     title: 'Smart Contracts & Solidity',
     description: 'Write and deploy simple smart contracts.',
+    courseCode: 'SOLIDITY-201',
     sections: [
       {
         id: ID('sec-sol-fund'),
@@ -113,18 +115,85 @@ const DUMMY_COURSES: Course[] = [
       },
     ],
   },
+  {
+    id: ID('course-web3-dapps'),
+    title: 'Web3 & dApps',
+    description: 'Build decentralized applications and connect to wallets.',
+    courseCode: 'WEB3-301',
+    sections: [
+      {
+        id: ID('sec-web3-wallets'),
+        title: 'Wallets and signing',
+        objective: 'Understand how users connect and sign transactions.',
+        outcome: 'You can integrate MetaMask (or similar) in a front-end.',
+        items: [
+          {
+            id: ID('item-web3-v1'),
+            type: 'video',
+            title: 'MetaMask and ethers.js',
+            order: 1,
+            url: 'https://www.youtube.com/embed/YV6HmQ0Rvb4',
+          },
+          {
+            id: ID('item-web3-link'),
+            type: 'link',
+            title: 'ethers.js docs',
+            order: 2,
+            url: 'https://docs.ethers.org/v6/',
+          },
+        ],
+      },
+      {
+        id: ID('sec-web3-dapp'),
+        title: 'Your first dApp',
+        objective: 'Connect a React app to a contract and display data.',
+        outcome: 'You have a small dApp that reads from a contract.',
+        items: [
+          {
+            id: ID('item-web3-v2'),
+            type: 'video',
+            title: 'Full-stack dApp tutorial',
+            order: 1,
+            url: 'https://www.youtube.com/embed/8FmX2_yBYP0',
+          },
+          {
+            id: ID('item-web3-pdf'),
+            type: 'pdf',
+            title: 'Lab: Build a token dashboard',
+            order: 2,
+          },
+        ],
+      },
+      {
+        id: ID('sec-web3-security'),
+        title: 'Security and best practices',
+        objective: 'Avoid common pitfalls in dApp and contract development.',
+        outcome: 'You can list key security considerations.',
+        items: [
+          {
+            id: ID('item-web3-link2'),
+            type: 'link',
+            title: 'Smart contract security checklist',
+            order: 1,
+            url: 'https://consensys.github.io/smart-contract-best-practices/',
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 function seed() {
   try {
     const insert = db.prepare(
-      'INSERT OR IGNORE INTO courses (id, title, description, sections) VALUES (?, ?, ?, ?)'
+      'INSERT OR IGNORE INTO courses (id, title, description, course_code, sections) VALUES (?, ?, ?, ?, ?)'
     );
     for (const course of DUMMY_COURSES) {
       const result = insert.run(
         course.id,
         course.title,
         course.description ?? null,
+        course.courseCode,
         JSON.stringify(course.sections)
       );
       if (result.changes > 0) {

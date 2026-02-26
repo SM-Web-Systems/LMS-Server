@@ -13,6 +13,7 @@ import forumRoutes from './routes/forum.js';
 import coursesRoutes from './routes/courses.js';
 import messagesRoutes from './routes/messages.js';
 import profileRoutes from './routes/profile.js';
+import usersRoutes from './routes/users.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -50,6 +51,7 @@ app.use('/api/v1/forum', forumRoutes);
 app.use('/api/v1/courses', coursesRoutes);
 app.use('/api/v1/messages', messagesRoutes);
 app.use('/api/v1/profile', profileRoutes);
+app.use('/api/v1/users', usersRoutes);
 
 // Error handling
 app.use(notFoundHandler);

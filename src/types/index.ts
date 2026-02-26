@@ -18,6 +18,7 @@ export interface UserResponse {
   name: string;
   email: string;
   role: UserRole;
+  courseCodes?: string[];
 }
 
 // Student Types
@@ -136,6 +137,7 @@ export interface CourseDocument {
   file_size: number;
   file_path: string;
   file_mime_type?: string;
+  course_ids?: string | null; // JSON array of course IDs; empty/null = open to all
   uploaded_by_id: string;
   uploaded_at: Date;
   created_at: Date;
@@ -153,6 +155,7 @@ export interface CourseDocumentResponse {
   fileSize: number;
   fileUrl: string;
   fileMimeType?: string;
+  courseIds?: string[];
   uploadedBy: string;
   uploadedById: string;
   uploadedAt: string;
@@ -205,6 +208,7 @@ export interface Course {
   id: string;
   title: string;
   description?: string;
+  courseCode: string;
   sections: CourseSection[];
 }
 
@@ -222,6 +226,15 @@ export interface MessageResponse {
   senderId: string;
   body: string;
   createdAt: string;
+}
+
+// Course members & user directory (BACKEND_UPDATE_REQUIREMENTS)
+export interface UserDirectoryItem {
+  id: string;
+  name: string;
+  email?: string;
+  role: UserRole;
+  courseCodes?: string[];
 }
 
 // Analytics Types

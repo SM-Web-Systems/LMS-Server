@@ -39,7 +39,13 @@ export async function getSubmissions(req: AuthRequest, res: Response, next: Next
     const studentId = req.query.studentId as string;
 
     const isAdmin = req.user?.role === 'admin';
-    const userStudentId = req.user?.studentId;
+    let userStudentId = req.user?.studentId;
+
+    // Resolve studentId from DB if missing in JWT (e.g. token from before student record existed)
+    if (!isAdmin && !userStudentId && req.user?.role === 'student' && req.user?.userId) {
+      const student = queryOne<Student>('SELECT id FROM students WHERE user_id = ?', [req.user.userId]);
+      userStudentId = student?.id;
+    }
 
     // Build query with filters
     const conditions: string[] = [];
@@ -145,7 +151,13 @@ export async function createSubmission(req: AuthRequest, res: Response, next: Ne
   try {
     const { title, description } = req.body;
     const file = req.file;
-    const userStudentId = req.user?.studentId;
+    let userStudentId = req.user?.studentId;
+
+    // If JWT has no studentId (e.g. token from before student record existed), resolve from DB for students
+    if (!userStudentId && req.user?.role === 'student' && req.user?.userId) {
+      const student = queryOne<Student>('SELECT id FROM students WHERE user_id = ?', [req.user.userId]);
+      userStudentId = student?.id;
+    }
 
     if (!userStudentId) {
       if (file) deleteFile(file.path);

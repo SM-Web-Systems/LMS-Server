@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS submissions (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Course documents table
+-- Course documents table (course_ids = JSON array of course IDs for restriction; empty/null = open to all)
 CREATE TABLE IF NOT EXISTS course_documents (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS course_documents (
   file_size INTEGER NOT NULL,
   file_path TEXT NOT NULL,
   file_mime_type TEXT,
+  course_ids TEXT,
   uploaded_by_id TEXT NOT NULL REFERENCES users(id),
   uploaded_at TEXT DEFAULT (datetime('now')),
   created_at TEXT DEFAULT (datetime('now')),
@@ -92,13 +93,33 @@ CREATE INDEX IF NOT EXISTS idx_forum_topics_author ON forum_topics(author_id);
 CREATE INDEX IF NOT EXISTS idx_forum_posts_topic ON forum_posts(topic_id);
 CREATE INDEX IF NOT EXISTS idx_forum_posts_author ON forum_posts(author_id);
 
--- Courses table (Course API: title, description, sections stored as JSON)
+-- Courses table (Course API: title, description, sections, course_code for access)
 CREATE TABLE IF NOT EXISTS courses (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
+  course_code TEXT UNIQUE NOT NULL,
   sections TEXT NOT NULL DEFAULT '[]'
 );
+CREATE INDEX IF NOT EXISTS idx_courses_course_code ON courses(course_code);
+
+-- User course codes (which courses a user can access; replaces enrollment for access control)
+CREATE TABLE IF NOT EXISTS user_course_codes (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  course_code TEXT NOT NULL,
+  PRIMARY KEY (user_id, course_code)
+);
+CREATE INDEX IF NOT EXISTS idx_user_course_codes_user ON user_course_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_course_codes_code ON user_course_codes(course_code);
+
+-- Course enrollments (legacy/roster; kept for compatibility; members can be derived from user_course_codes)
+CREATE TABLE IF NOT EXISTS course_enrollments (
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (course_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_course_enrollments_user ON course_enrollments(user_id);
+CREATE INDEX IF NOT EXISTS idx_course_enrollments_course ON course_enrollments(course_id);
 
 -- Messages API: 1:1 conversations (user1_id < user2_id for stable ordering)
 CREATE TABLE IF NOT EXISTS conversations (

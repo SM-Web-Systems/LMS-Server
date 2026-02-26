@@ -13,10 +13,29 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-export const db = new Database(DB_PATH);
+export let db = new Database(DB_PATH);
 
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
+
+// Ensure user_course_codes exists (for DBs created before course-code access was added)
+function ensureCourseCodeTables(): void {
+  const hasTable = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_course_codes'")
+    .get();
+  if (!hasTable) {
+    db.exec(`
+      CREATE TABLE user_course_codes (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        course_code TEXT NOT NULL,
+        PRIMARY KEY (user_id, course_code)
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_course_codes_user ON user_course_codes(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_course_codes_code ON user_course_codes(course_code);
+    `);
+  }
+}
+ensureCourseCodeTables();
 
 export function query<T>(sql: string, params: unknown[] = []): T[] {
   const stmt = db.prepare(sql);
@@ -42,4 +61,11 @@ export function insert(sql: string, params: unknown[] = []): string | number {
 
 export function close(): void {
   db.close();
+}
+
+export function _resetForTests(schemaSQL: string): void {
+  try { db.close(); } catch { /* already closed */ }
+  db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  db.exec(schemaSQL);
 }

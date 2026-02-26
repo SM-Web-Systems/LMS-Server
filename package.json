@@ -11,8 +11,12 @@
     "db:schema": "tsx src/scripts/runSchema.ts",
     "db:seed": "tsx src/scripts/seedUsers.ts",
     "db:seed-courses": "tsx src/scripts/seedCourses.ts",
+    "db:seed-students": "tsx src/scripts/seedStudentsWithCourses.ts",
     "db:migrate": "tsx src/scripts/migrateDocuments.ts",
-    "db:migrate-profile": "tsx src/scripts/migrateProfile.ts"
+    "db:migrate-profile": "tsx src/scripts/migrateProfile.ts",
+    "db:migrate-course-code": "tsx src/scripts/migrateCourseCodeAccess.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "student",
@@ -42,8 +46,11 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.7.4",
+    "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^4.0.18"
   }
 }

@@ -9,6 +9,20 @@ import { AppError } from '../middleware/errorHandler.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+function getUserCourseCodes(userId: string): string[] {
+  try {
+    const rows = query<{ course_code: string }>(
+      'SELECT course_code FROM user_course_codes WHERE user_id = ? ORDER BY course_code',
+      [userId]
+    );
+    return rows.map((r) => r.course_code);
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string };
+    if (err?.code === 'SQLITE_ERROR' && err?.message?.includes('user_course_codes')) return [];
+    throw e;
+  }
+}
+
 export async function login(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const { email, password } = req.body;
@@ -61,6 +75,7 @@ export async function login(req: AuthRequest, res: Response, next: NextFunction)
           name: user.name,
           email: user.email,
           role: user.role,
+          courseCodes: getUserCourseCodes(user.id),
         },
       },
     });
@@ -129,6 +144,7 @@ export async function googleLogin(req: AuthRequest, res: Response, next: NextFun
           name: user.name,
           email: user.email,
           role: user.role,
+          courseCodes: getUserCourseCodes(user.id),
         },
       },
     });
@@ -167,6 +183,7 @@ export async function getMe(req: AuthRequest, res: Response, next: NextFunction)
         name: user.name,
         email: user.email,
         role: user.role,
+        courseCodes: getUserCourseCodes(user.id),
       },
     });
   } catch (error) {
