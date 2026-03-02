@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { query, queryOne, execute } from '../config/database.js';
 import { AuthRequest, Submission, SubmissionResponse, Student, User, ErrorCodes, SubmissionStatus } from '../types/index.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { deleteFile, getFileUrl } from '../utils/fileUpload.js';
+import { deleteFile, getFileUrl, resolveUploadPath } from '../utils/fileUpload.js';
 
 // Helper to convert DB submission to API response
 function toSubmissionResponse(submission: Submission & { student_name?: string; reviewer_name?: string }): SubmissionResponse {
@@ -378,15 +378,15 @@ export async function downloadSubmission(req: AuthRequest, res: Response, next: 
       throw new AppError('You do not have permission to download this file', 403, ErrorCodes.FORBIDDEN);
     }
 
-    // Check if file exists
-    if (!fs.existsSync(submission.file_path)) {
+    const safePath = resolveUploadPath(submission.file_path);
+
+    if (!fs.existsSync(safePath)) {
       throw new AppError('File not found', 404, ErrorCodes.NOT_FOUND);
     }
 
-    // Set headers and send file
     res.setHeader('Content-Type', submission.file_mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${submission.file_name}"`);
-    res.sendFile(path.resolve(submission.file_path));
+    res.sendFile(safePath);
   } catch (error) {
     next(error);
   }

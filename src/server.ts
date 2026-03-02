@@ -23,6 +23,17 @@ function startServer() {
   }
 }
 
+// Catch unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️  Unhandled rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught exception:', error);
+  close();
+  process.exit(1);
+});
+
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down gracefully...');

@@ -135,3 +135,12 @@ export function getFileUrl(submissionId: string): string {
 export function getDocumentFileUrl(documentId: string): string {
   return `/api/v1/documents/${documentId}/download`;
 }
+
+export function resolveUploadPath(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  const uploadRoot = path.resolve(UPLOAD_DIR);
+  if (!resolved.startsWith(uploadRoot + path.sep) && resolved !== uploadRoot) {
+    throw new AppError('Invalid file path', 403, ErrorCodes.FORBIDDEN);
+  }
+  return resolved;
+}

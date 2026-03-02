@@ -15,7 +15,7 @@ if (!fs.existsSync(dbDir)) {
 
 export let db = new Database(DB_PATH);
 
-// Enable foreign keys
+db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 // Ensure user_course_codes exists (for DBs created before course-code access was added)

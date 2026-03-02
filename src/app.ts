@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -23,6 +25,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Security headers
+app.use(helmet());
+
 // CORS configuration
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 app.use(cors({
@@ -32,26 +37,44 @@ app.use(cors({
   credentials: true,
 }));
 
+// Rate limiting — general API: 100 requests per 15 min per IP
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later' } },
+});
+
+// Stricter rate limit for auth endpoints: 20 attempts per 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many login attempts, please try again later' } },
+});
+
 // Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint
+// Health check endpoint (no rate limit)
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // API routes
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/students', studentsRoutes);
-app.use('/api/v1/submissions', submissionsRoutes);
-app.use('/api/v1/analytics', analyticsRoutes);
-app.use('/api/v1/documents', documentsRoutes);
-app.use('/api/v1/forum', forumRoutes);
-app.use('/api/v1/courses', coursesRoutes);
-app.use('/api/v1/messages', messagesRoutes);
-app.use('/api/v1/profile', profileRoutes);
-app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/auth', authLimiter, authRoutes);
+app.use('/api/v1/students', apiLimiter, studentsRoutes);
+app.use('/api/v1/submissions', apiLimiter, submissionsRoutes);
+app.use('/api/v1/analytics', apiLimiter, analyticsRoutes);
+app.use('/api/v1/documents', apiLimiter, documentsRoutes);
+app.use('/api/v1/forum', apiLimiter, forumRoutes);
+app.use('/api/v1/courses', apiLimiter, coursesRoutes);
+app.use('/api/v1/messages', apiLimiter, messagesRoutes);
+app.use('/api/v1/profile', apiLimiter, profileRoutes);
+app.use('/api/v1/users', apiLimiter, usersRoutes);
 
 // Error handling
 app.use(notFoundHandler);

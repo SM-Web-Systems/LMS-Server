@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { query, queryOne, execute } from '../config/database.js';
 import { AuthRequest, CourseDocument, CourseDocumentResponse, User, ErrorCodes } from '../types/index.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { deleteFile, getDocumentFileUrl } from '../utils/fileUpload.js';
+import { deleteFile, getDocumentFileUrl, resolveUploadPath } from '../utils/fileUpload.js';
 
 function parseCourseIds(courseIdsJson: string | null | undefined): string[] {
   if (courseIdsJson == null || courseIdsJson === '') return [];
@@ -380,16 +380,16 @@ export async function downloadDocument(req: AuthRequest, res: Response, next: Ne
       }
     }
 
-    // Check if file exists
-    if (!fs.existsSync(document.file_path)) {
+    const safePath = resolveUploadPath(document.file_path);
+
+    if (!fs.existsSync(safePath)) {
       throw new AppError('File not found', 404, ErrorCodes.NOT_FOUND);
     }
 
-    // Set headers and send file
     res.setHeader('Content-Type', document.file_mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${document.file_name}"`);
     res.setHeader('Content-Length', document.file_size);
-    res.sendFile(path.resolve(document.file_path));
+    res.sendFile(safePath);
   } catch (error) {
     next(error);
   }
