@@ -142,7 +142,7 @@ function validateCourseForCreate(body: unknown): { course: Course; errors: Array
   const sectionsArray = Array.isArray(sections) ? (sections as CourseSection[]) : [];
   const courseCode = courseCodeRaw != null ? normalizeCourseCode(String(courseCodeRaw)) : '';
   const course: Course = {
-    id: (o?.id && String(o.id).trim()) || uuidv4(),
+    id: (o?.id ? String(o.id).trim() : '') || uuidv4(),
     title: title != null ? String(title).trim() : '',
     description: o?.description != null ? String(o.description).trim() : undefined,
     courseCode,

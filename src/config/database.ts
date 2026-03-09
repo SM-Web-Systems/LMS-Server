@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
 import dotenv from 'dotenv';
 
@@ -13,7 +13,7 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-export let db = new Database(DB_PATH);
+export let db: DatabaseType = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -56,7 +56,7 @@ export function execute(sql: string, params: unknown[] = []): number {
 export function insert(sql: string, params: unknown[] = []): string | number {
   const stmt = db.prepare(sql);
   const result = stmt.run(...params);
-  return result.lastInsertRowid;
+  return Number(result.lastInsertRowid);
 }
 
 export function close(): void {

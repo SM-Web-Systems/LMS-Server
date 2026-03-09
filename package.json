@@ -2,6 +2,7 @@
   "name": "lms-server",
   "version": "1.0.0",
   "description": "Backend server for Student Management System",
+  "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
