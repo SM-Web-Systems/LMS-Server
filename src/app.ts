@@ -25,6 +25,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Trust proxy (Nginx) so rate limiting uses real client IPs
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 
@@ -64,8 +67,10 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API routes
-app.use('/api/v1/auth', authLimiter, authRoutes);
+// API routes — auth write endpoints get stricter limit; /auth/me uses general limit
+app.use('/api/v1/auth/login', authLimiter);
+app.use('/api/v1/auth/google', authLimiter);
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/students', apiLimiter, studentsRoutes);
 app.use('/api/v1/submissions', apiLimiter, submissionsRoutes);
 app.use('/api/v1/analytics', apiLimiter, analyticsRoutes);
