@@ -210,6 +210,25 @@ export interface SubmissionQueryParams {
 
 ---
 
+## Authentication flow (Clerk and WordPress)
+
+The API uses **Clerk by default**. If the backend detects a **WordPress** request, it authenticates with a WordPress-issued JWT instead.
+
+- **Default (Clerk):** Send `Authorization: Bearer <clerk_session_token>`. No extra headers. The frontend should use Clerk’s `getToken()` and attach it to requests.
+- **WordPress:** When the request comes from WordPress (e.g. embedded LMS in a WP page), send the same `Authorization: Bearer <wordpress_jwt>` and add the header **`X-Auth-Source: wordpress`**. The backend will verify the token with `WORDPRESS_JWT_SECRET` (same value as `JWT_AUTH_SECRET_KEY` in wp-config.php) and find-or-create the user by email.
+
+Example for WordPress-originated requests:
+
+```http
+GET /api/v1/auth/me
+Authorization: Bearer <wordpress_jwt>
+X-Auth-Source: wordpress
+```
+
+Backend login (`POST /auth/login`) still returns a JWT; that token is accepted as a fallback when Clerk verification fails, so existing email/password flows keep working.
+
+---
+
 ## Auth Service
 
 Create `src/services/authService.ts`:

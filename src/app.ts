@@ -31,12 +31,21 @@ app.set('trust proxy', 1);
 // Security headers
 app.use(helmet());
 
-// CORS configuration
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+// CORS: comma-separated origins in FRONTEND_URL (e.g. Vite app + LocalWP: http://localhost:5173,https://mysite.local)
+const defaultOrigins = 'http://localhost:5173';
+const frontendOrigins = (process.env.FRONTEND_URL || defaultOrigins)
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: frontendUrl,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (frontendOrigins.includes(origin)) return callback(null, true);
+    callback(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Auth-Source'],
   credentials: true,
 }));
 
