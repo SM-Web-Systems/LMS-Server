@@ -35,6 +35,7 @@ export interface WordPressUserInfo {
   email: string;
   name: string;
   wpUserId?: string;
+  role: 'admin' | 'student';
 }
 
 export function isWordPressAuthConfigured(): boolean {
@@ -85,5 +86,10 @@ export function verifyWordPressToken(token: string): WordPressUserInfo {
   if (!email) throw new Error('WordPress JWT missing email and user id claim');
 
   const name = nameFromPayload || (wpUserId ? `WordPress User ${wpUserId}` : 'User');
-  return { email, name, wpUserId };
+
+  const rawRole = (payload.role ?? '')?.toString().toLowerCase().trim();
+  const role: 'admin' | 'student' =
+    rawRole === 'admin' || rawRole === 'administrator' ? 'admin' : 'student';
+
+  return { email, name, wpUserId, role };
 }

@@ -1,7 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { verifyToken } from '../config/jwt.js';
-import { clerk, verifyClerkJWT, getClerkUserInfo } from '../config/clerk.js';
 import {
   isWordPressAuthConfigured,
   verifyWordPressToken,
@@ -30,7 +29,6 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
   const token = authHeader.substring(7);
 
-  // If request indicates WordPress, authenticate with WordPress JWT only
   const authSource = req.headers[AUTH_SOURCE_HEADER]?.toString().toLowerCase();
   if (authSource === 'wordpress') {
     const ok = await tryVerifyWordPressAndAttachUser(token, req);
@@ -49,18 +47,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     return;
   }
 
-  // Default order:
-  // 1) Clerk
-  // 2) Backend JWT (email/password login)
-  // 3) WordPress JWT (auto-detect)
-  if (clerk) {
-    const ok = await tryVerifyClerkToken(token, req);
-    if (ok) {
-      next();
-      return;
-    }
-  }
-
+  // 1) Backend JWT (email/password login)
   try {
     const payload = verifyToken(token);
     req.user = payload;
@@ -72,6 +59,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     }
   }
 
+  // 2) WordPress JWT (auto-detect)
   if (isWordPressAuthConfigured()) {
     const ok = await tryVerifyWordPressAndAttachUser(token, req);
     if (ok) {
@@ -107,13 +95,33 @@ async function tryVerifyWordPressAndAttachUser(
       const id = uuidv4();
       execute(
         'INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
-        [id, wpUser.name, wpUser.email.toLowerCase(), '', 'student']
+        [id, wpUser.name, wpUser.email.toLowerCase(), '', wpUser.role]
       );
       user = queryOne<User>('SELECT * FROM users WHERE id = ?', [id]);
+
+      if (user) {
+        const defaults = (process.env.DEFAULT_COURSE_CODES ?? '')
+          .split(',')
+          .map((c) => c.trim().toUpperCase())
+          .filter(Boolean);
+        for (const code of defaults) {
+          try {
+            execute(
+              'INSERT OR IGNORE INTO user_course_codes (user_id, course_code) VALUES (?, ?)',
+              [user.id, code]
+            );
+          } catch { /* skip invalid codes */ }
+        }
+      }
     }
 
     if (!user) {
       return false;
+    }
+
+    if (user.role !== wpUser.role) {
+      execute('UPDATE users SET role = ? WHERE id = ?', [wpUser.role, user.id]);
+      user = { ...user, role: wpUser.role };
     }
 
     let studentId: string | undefined;
@@ -135,58 +143,6 @@ async function tryVerifyWordPressAndAttachUser(
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
       console.warn('[auth] 401: WordPress token invalid or expired:', (err as Error).message);
-    }
-    return false;
-  }
-}
-
-async function tryVerifyClerkToken(
-  token: string,
-  req: AuthRequest,
-) : Promise<boolean> {
-  try {
-    const clerkPayload = await verifyClerkJWT(token);
-    if (!clerkPayload) throw new Error('Invalid Clerk token');
-    const clerkUserId = clerkPayload.sub;
-
-    const clerkInfo = await getClerkUserInfo(clerkUserId);
-    if (!clerkInfo) {
-      return false;
-    }
-
-    // Find or create local user
-    let user = queryOne<User>('SELECT * FROM users WHERE email = ?', [clerkInfo.email.toLowerCase()]);
-
-    if (!user) {
-      const id = uuidv4();
-      execute(
-        'INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
-        [id, clerkInfo.name, clerkInfo.email.toLowerCase(), '', 'student']
-      );
-      user = queryOne<User>('SELECT * FROM users WHERE id = ?', [id]);
-    }
-
-    if (!user) {
-      return false;
-    }
-
-    let studentId: string | undefined;
-    if (user.role === 'student') {
-      const student = queryOne<Student>('SELECT id FROM students WHERE user_id = ?', [user.id]);
-      studentId = student?.id;
-    }
-
-    req.user = {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      studentId,
-    };
-
-    return true;
-  } catch (err) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[auth] 401: Clerk token invalid or expired:', (err as Error).message);
     }
     return false;
   }
