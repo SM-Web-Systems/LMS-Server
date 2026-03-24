@@ -12,11 +12,13 @@ services:
     image: nginx:alpine
     container_name: lms-nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    environment:
+      - LMS_DOMAIN=${LMS_DOMAIN:-lms.smwebsystems.com}
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /home/liam-mcmaster/projects/LMS-Frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${FRONTEND_DIST_PATH:-../LMS-Frontend/dist}:/usr/share/nginx/html:ro
       - certbot-etc:/etc/letsencrypt:ro
       - certbot-var:/var/lib/letsencrypt
     depends_on:
@@ -29,7 +31,7 @@ services:
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
-      - /home/liam-mcmaster/projects/LMS-Frontend/dist:/usr/share/nginx/html
+      - ${FRONTEND_DIST_PATH:-../LMS-Frontend/dist}:/usr/share/nginx/html
     depends_on:
       - nginx
 
