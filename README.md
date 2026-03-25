@@ -93,9 +93,39 @@ npm run dev
 Server runs at `http://localhost:3001` with hot reload.
 
 ### Production
+
 ```bash
 npm run build
 npm start
+```
+
+### Docker (production)
+
+```bash
+# 1. Copy and configure environment
+cp .env.example .env
+# Edit .env — set JWT_SECRET, WORDPRESS_JWT_SECRET, LMS_DOMAIN, FRONTEND_URL, etc.
+
+# 2. First-time TLS certificate (Let's Encrypt)
+#    Start nginx on port 80 only (comment out the 443 server block or use a temp config):
+docker compose up -d nginx
+docker compose run --rm certbot certonly \
+  --webroot -w /usr/share/nginx/html \
+  -d your-domain.com --agree-tos --email you@example.com
+docker compose down
+
+# 3. Start all services
+docker compose up -d
+
+# 4. Certificate renewal (add to host crontab):
+#    0 3 * * * cd /path/to/LMS-Server-1 && docker compose run --rm certbot renew --quiet && docker compose exec nginx nginx -s reload
+```
+
+### Docker (local development)
+
+```bash
+docker compose -f docker-compose.local.yml up --build
+# Frontend served at http://localhost:8080, API at http://localhost:3001
 ```
 
 ## API Endpoints

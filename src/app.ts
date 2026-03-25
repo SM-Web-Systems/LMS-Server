@@ -16,6 +16,7 @@ import coursesRoutes from './routes/courses.js';
 import messagesRoutes from './routes/messages.js';
 import profileRoutes from './routes/profile.js';
 import usersRoutes from './routes/users.js';
+import quizzesRoutes from './routes/quizzes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -49,19 +50,19 @@ app.use(cors({
   credentials: true,
 }));
 
-// Rate limiting — general API: 100 requests per 15 min per IP
+// Rate limiting — general API: 500 requests per 15 min per IP
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later' } },
 });
 
-// Stricter rate limit for auth endpoints: 20 attempts per 15 min per IP
+// Stricter rate limit for auth endpoints: 30 attempts per 15 min per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many login attempts, please try again later' } },
@@ -89,6 +90,7 @@ app.use('/api/v1/courses', apiLimiter, coursesRoutes);
 app.use('/api/v1/messages', apiLimiter, messagesRoutes);
 app.use('/api/v1/profile', apiLimiter, profileRoutes);
 app.use('/api/v1/users', apiLimiter, usersRoutes);
+app.use('/api/v1/quizzes', apiLimiter, quizzesRoutes);
 
 // Error handling
 app.use(notFoundHandler);

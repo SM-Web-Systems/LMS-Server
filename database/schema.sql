@@ -140,3 +140,34 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 CREATE INDEX IF NOT EXISTS idx_conversations_user1 ON conversations(user1_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_user2 ON conversations(user2_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON conversation_messages(conversation_id);
+
+-- Quizzes (questions stored as JSON array)
+CREATE TABLE IF NOT EXISTS quizzes (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  course_id TEXT REFERENCES courses(id) ON DELETE SET NULL,
+  questions TEXT NOT NULL DEFAULT '[]',
+  passing_score INTEGER NOT NULL DEFAULT 70,
+  created_by_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_quizzes_course ON quizzes(course_id);
+CREATE INDEX IF NOT EXISTS idx_quizzes_created_by ON quizzes(created_by_id);
+
+-- Quiz completions (answers stored as JSON object)
+CREATE TABLE IF NOT EXISTS quiz_completions (
+  id TEXT PRIMARY KEY,
+  quiz_id TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  passed INTEGER NOT NULL DEFAULT 0,
+  answers TEXT NOT NULL DEFAULT '{}',
+  completed_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_completions_quiz ON quiz_completions(quiz_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_completions_user ON quiz_completions(user_id);

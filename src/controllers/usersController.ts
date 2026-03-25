@@ -57,10 +57,46 @@ export async function getUsers(req: AuthRequest, res: Response, next: NextFuncti
   }
 }
 
+export async function getUser(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const row = queryOne<{ id: string; name: string; email: string; role: string; description: string | null }>(
+      'SELECT id, name, email, role, description FROM users WHERE id = ?',
+      [req.params.id]
+    );
+    if (!row) {
+      throw new AppError('User not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    const user: UserDirectoryItem & { displayName?: string; description?: string } = {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      role: row.role as UserDirectoryItem['role'],
+      displayName: row.name,
+      description: row.description ?? undefined,
+      courseCodes: getUserCourseCodes(row.id),
+    };
+
+    res.json({ success: true, data: user });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function patchUser(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     let targetUserId = req.params.id;
-    const { courseCodes } = req.body ?? {};
+    const { courseCodes, displayName, description } = req.body ?? {};
+
+    const isAdmin = req.user?.role === 'admin';
+    const isSelf = req.user?.userId === targetUserId;
+
+    if (courseCodes !== undefined && !isAdmin) {
+      throw new AppError('Only admins can update course codes', 403, ErrorCodes.FORBIDDEN);
+    }
+    if (!isAdmin && !isSelf) {
+      throw new AppError('You can only update your own profile', 403, ErrorCodes.FORBIDDEN);
+    }
 
     // Resolve: frontend may send student.id instead of users.id
     let user = queryOne<{ id: string }>('SELECT id FROM users WHERE id = ?', [targetUserId]);
@@ -73,6 +109,25 @@ export async function patchUser(req: AuthRequest, res: Response, next: NextFunct
     }
     if (!user) {
       throw new AppError('User not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    if (displayName !== undefined || description !== undefined) {
+      const updates: string[] = [];
+      const params: unknown[] = [];
+      if (displayName !== undefined) { updates.push('name = ?'); params.push(displayName); }
+      if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+      updates.push("updated_at = datetime('now')");
+      params.push(targetUserId);
+      execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+
+    if (courseCodes === undefined && displayName === undefined && description === undefined) {
+      const current = getUserCourseCodes(targetUserId);
+      res.json({
+        success: true,
+        data: { id: targetUserId, courseCodes: current },
+      });
+      return;
     }
 
     if (courseCodes === undefined) {

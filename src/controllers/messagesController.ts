@@ -73,7 +73,7 @@ export async function postConversations(req: AuthRequest, res: Response, next: N
       created = true;
       const id = uuidv4();
       execute(
-        'INSERT INTO conversations (id, user1_id, user2_id, updated_at) VALUES (?, ?, ?, datetime("now"))',
+        `INSERT INTO conversations (id, user1_id, user2_id, updated_at) VALUES (?, ?, ?, datetime('now'))`,
         [id, id1, id2]
       );
       row = queryOne<{ id: string; user1_id: string; user2_id: string; updated_at: string }>(
