@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { ErrorCodes } from '../types/index.js';
 
 export class AppError extends Error {
@@ -41,6 +42,28 @@ export function errorHandler(
   }
 
   // Handle Multer errors
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: ErrorCodes.FILE_TOO_LARGE,
+          message: 'File size exceeds maximum limit of 10MB',
+        },
+      });
+      return;
+    }
+
+    res.status(400).json({
+      success: false,
+      error: {
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: 'Unable to process uploaded file. Please check your file and try again.',
+      },
+    });
+    return;
+  }
+
   if (err.message === 'File too large') {
     res.status(400).json({
       success: false,
