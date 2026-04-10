@@ -1,11 +1,16 @@
 import { Response, NextFunction } from 'express';
 import { verifyToken } from '../config/jwt.js';
 import { AuthRequest, ErrorCodes, UserRole } from '../types/index.js';
+import { resolveUserFromClerkSessionToken } from '../auth/clerkUser.js';
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
+  void authenticateAsync(req, res, next);
+}
+
+async function authenticateAsync(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({
         success: false,
@@ -18,20 +23,30 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
     }
 
     const token = authHeader.substring(7);
-    
+
     try {
       const payload = verifyToken(token);
       req.user = payload;
       next();
+      return;
     } catch {
-      res.status(401).json({
-        success: false,
-        error: {
-          code: ErrorCodes.UNAUTHORIZED,
-          message: 'Invalid or expired token',
-        },
-      });
+      // Not an LMS-issued JWT; try Clerk session token if configured
     }
+
+    const clerkUser = await resolveUserFromClerkSessionToken(token);
+    if (clerkUser) {
+      req.user = clerkUser;
+      next();
+      return;
+    }
+
+    res.status(401).json({
+      success: false,
+      error: {
+        code: ErrorCodes.UNAUTHORIZED,
+        message: 'Invalid or expired token',
+      },
+    });
   } catch (error) {
     next(error);
   }

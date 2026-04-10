@@ -17,6 +17,27 @@ function parseCourseIds(courseIdsJson: string | null | undefined): string[] {
   }
 }
 
+/** Multipart JSON string or JSON body array → DB JSON (null = open to all). */
+function parseCourseIdsFromBody(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  let arr: string[] = [];
+  if (Array.isArray(raw)) {
+    arr = raw.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter(Boolean);
+  } else if (typeof raw === 'string') {
+    try {
+      const p = JSON.parse(raw) as unknown;
+      if (Array.isArray(p)) {
+        arr = p.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter(Boolean);
+      }
+    } catch {
+      return null;
+    }
+  } else {
+    return null;
+  }
+  return arr.length > 0 ? JSON.stringify(arr) : null;
+}
+
 function getUserCourseCodes(userId: string): string[] {
   const rows = query<{ course_code: string }>(
     'SELECT course_code FROM user_course_codes WHERE user_id = ?',
@@ -170,7 +191,7 @@ export async function createDocument(req: AuthRequest, res: Response, next: Next
     const { title, description, category, courseIds } = req.body;
     const file = req.file;
     const adminUserId = req.user?.userId;
-    const courseIdsJson = Array.isArray(courseIds) ? JSON.stringify(courseIds) : null;
+    const courseIdsJson = parseCourseIdsFromBody(courseIds);
 
     // Validation
     const errors: Array<{ field: string; message: string }> = [];

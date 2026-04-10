@@ -16,6 +16,7 @@ import coursesRoutes from './routes/courses.js';
 import messagesRoutes from './routes/messages.js';
 import profileRoutes from './routes/profile.js';
 import usersRoutes from './routes/users.js';
+import quizzesRoutes from './routes/quizzes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -75,6 +76,7 @@ app.use('/api/v1/courses', apiLimiter, coursesRoutes);
 app.use('/api/v1/messages', apiLimiter, messagesRoutes);
 app.use('/api/v1/profile', apiLimiter, profileRoutes);
 app.use('/api/v1/users', apiLimiter, usersRoutes);
+app.use('/api/v1/quizzes', apiLimiter, quizzesRoutes);
 
 // Error handling
 app.use(notFoundHandler);

@@ -9,9 +9,12 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('student', 'admin')),
   description TEXT,
+  clerk_user_id TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk_user_id ON users(clerk_user_id) WHERE clerk_user_id IS NOT NULL;
 
 -- Students table
 CREATE TABLE IF NOT EXISTS students (
@@ -140,3 +143,32 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 CREATE INDEX IF NOT EXISTS idx_conversations_user1 ON conversations(user1_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_user2 ON conversations(user2_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON conversation_messages(conversation_id);
+
+-- Quizzes (admin-managed; completions per user)
+CREATE TABLE IF NOT EXISTS quizzes (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  course_id TEXT,
+  passing_score INTEGER NOT NULL DEFAULT 70,
+  questions TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS quiz_completions (
+  id TEXT PRIMARY KEY,
+  quiz_id TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  passed INTEGER NOT NULL,
+  answers TEXT NOT NULL DEFAULT '{}',
+  payment_status TEXT DEFAULT 'none',
+  completed_at TEXT DEFAULT (datetime('now')),
+  UNIQUE (quiz_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_quizzes_course ON quizzes(course_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_completions_user ON quiz_completions(user_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_completions_quiz ON quiz_completions(quiz_id);

@@ -63,7 +63,16 @@ A TypeScript/Express backend server for the KanyaCSI Student Management System. 
 
    # CORS Configuration
    FRONTEND_URL=http://localhost:5173
+
+   # Clerk (optional — use with Clerk-powered frontend)
+   # Secret key from Clerk Dashboard → API Keys (not the publishable key).
+   # Enables verifying Clerk session JWTs on protected routes and /auth/me.
+   CLERK_SECRET_KEY=sk_test_...
+   # Optional: comma-separated allowed origins for Clerk tokens (defaults to FRONTEND_URL)
+   # CLERK_AUTHORIZED_PARTIES=http://localhost:5173,https://yourapp.com
    ```
+
+   **Clerk + LMS users:** On first successful Clerk sign-in, the server links by **email** to an existing `users` row (and sets `clerk_user_id`) or creates a **student** user plus a `students` row. Seed admins/students in the DB first if you need a specific role; new Clerk-only sign-ups are **students**.
 
 4. **Initialize the database**
 
