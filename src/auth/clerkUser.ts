@@ -75,7 +75,7 @@ export async function resolveUserFromClerkSessionToken(sessionToken: string): Pr
 
   const byEmail = queryOne<User>('SELECT * FROM users WHERE email = ?', [email]);
   if (byEmail) {
-    execute('UPDATE users SET clerk_user_id = ?, updated_at = datetime("now") WHERE id = ?', [sub, byEmail.id]);
+    execute("UPDATE users SET clerk_user_id = ?, updated_at = datetime('now') WHERE id = ?", [sub, byEmail.id]);
     return buildJwtPayload(byEmail);
   }
 
