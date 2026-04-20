@@ -192,9 +192,18 @@ export interface ForumPostResponse {
 
 // Course API Types (BACKEND_UPDATE_REQUIREMENTS)
 export type CourseItem =
-  | { id: string; type: 'video'; title: string; order?: number; url: string }
-  | { id: string; type: 'link'; title: string; order?: number; url: string }
-  | { id: string; type: 'pdf'; title: string; order?: number; documentId?: string; fileUrl?: string };
+  | { id: string; type: 'video'; title: string; order?: number; url: string; description?: string; information?: string }
+  | { id: string; type: 'link'; title: string; order?: number; url: string; description?: string; information?: string }
+  | {
+      id: string;
+      type: 'pdf';
+      title: string;
+      order?: number;
+      documentId?: string;
+      fileUrl?: string;
+      description?: string;
+      information?: string;
+    };
 
 export interface CourseSection {
   id: string;

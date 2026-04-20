@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
+  information TEXT,
   course_id TEXT,
   passing_score INTEGER NOT NULL DEFAULT 70,
   questions TEXT NOT NULL DEFAULT '[]',

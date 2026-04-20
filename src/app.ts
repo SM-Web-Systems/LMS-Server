@@ -29,28 +29,68 @@ const app = express();
 // Security headers
 app.use(helmet());
 
-// CORS configuration
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+// CORS — FRONTEND_URL can be comma-separated; in development, any localhost / 127.0.0.1 port is allowed (Vite port shifts when 5173 is taken).
+const frontendUrlRaw = process.env.FRONTEND_URL || 'http://localhost:5173';
+const allowedOrigins = frontendUrlRaw.split(',').map((s) => s.trim()).filter(Boolean);
+const isDev = process.env.NODE_ENV !== 'production';
+
+const corsOrigin: cors.CorsOptions['origin'] = (origin, callback) => {
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+  if (allowedOrigins.includes(origin)) {
+    callback(null, true);
+    return;
+  }
+  if (isDev && /^https?:\/\/localhost(?::\d+)?$/i.test(origin)) {
+    callback(null, true);
+    return;
+  }
+  if (isDev && /^https?:\/\/127\.0\.0\.1(?::\d+)?$/i.test(origin)) {
+    callback(null, true);
+    return;
+  }
+  callback(new Error(`CORS blocked origin: ${origin}`));
+};
+
 app.use(cors({
-  origin: frontendUrl,
+  origin: corsOrigin,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
 
-// Rate limiting — general API: 100 requests per 15 min per IP
+/** General API cap per IP (window below). In dev, HMR + React Strict Mode + many routes can burn through a low cap quickly. */
+function readApiRateLimitMax(): number {
+  const raw = process.env.API_RATE_LIMIT_MAX;
+  if (raw != null && raw !== '') {
+    const n = Number.parseInt(raw, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return isDev ? 10_000 : 100;
+}
+
+function readAuthRateLimitMax(): number {
+  const raw = process.env.AUTH_RATE_LIMIT_MAX;
+  if (raw != null && raw !== '') {
+    const n = Number.parseInt(raw, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return isDev ? 500 : 20;
+}
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: readApiRateLimitMax(),
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later' } },
 });
 
-// Stricter rate limit for auth endpoints: 20 attempts per 15 min per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: readAuthRateLimitMax(),
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many login attempts, please try again later' } },

@@ -53,6 +53,16 @@ function ensureClerkUserIdColumn(): void {
 }
 ensureClerkUserIdColumn();
 
+function ensureQuizInformationColumn(): void {
+  const has = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='quizzes'").get();
+  if (!has) return;
+  const cols = db.prepare('PRAGMA table_info(quizzes)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'information')) {
+    db.exec('ALTER TABLE quizzes ADD COLUMN information TEXT');
+  }
+}
+ensureQuizInformationColumn();
+
 export function query<T>(sql: string, params: unknown[] = []): T[] {
   const stmt = db.prepare(sql);
   return stmt.all(...params) as T[];

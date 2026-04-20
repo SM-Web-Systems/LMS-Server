@@ -12,12 +12,15 @@ interface QuizQuestion {
   correctIndex?: number;
   correctAnswer?: string;
   order: number;
+  /** Optional context for students (shown during the quiz). */
+  information?: string;
 }
 
 interface QuizRow {
   id: string;
   title: string;
   description: string | null;
+  information?: string | null;
   course_id: string | null;
   passing_score: number;
   questions: string;
@@ -52,11 +55,23 @@ function parseQuestions(json: string): QuizQuestion[] {
   }
 }
 
+function parseQuizIdParam(raw: string | undefined): string {
+  const id = raw != null ? String(raw).trim() : '';
+  if (!id) {
+    throw new AppError('Quiz id is required', 400, ErrorCodes.VALIDATION_ERROR);
+  }
+  return id;
+}
+
 function rowToQuiz(row: QuizRow) {
   return {
     id: row.id,
     title: row.title,
     description: row.description ?? undefined,
+    information:
+      row.information != null && String(row.information).trim() !== ''
+        ? String(row.information).trim()
+        : undefined,
     courseId: row.course_id ?? undefined,
     passingScore: row.passing_score,
     questions: parseQuestions(row.questions),
@@ -121,6 +136,9 @@ function validateQuestions(questions: unknown): QuizQuestion[] {
     if (typeof o.id !== 'string' || typeof o.question !== 'string' || typeof o.order !== 'number') {
       throw new AppError('Each question needs id, question, and order', 400, ErrorCodes.VALIDATION_ERROR);
     }
+    const infoRaw = o.information;
+    const information =
+      typeof infoRaw === 'string' && infoRaw.trim() !== '' ? infoRaw.trim() : undefined;
     out.push({
       id: o.id,
       type: typeof o.type === 'string' ? o.type : 'short_answer',
@@ -129,6 +147,7 @@ function validateQuestions(questions: unknown): QuizQuestion[] {
       correctIndex: typeof o.correctIndex === 'number' ? o.correctIndex : undefined,
       correctAnswer: typeof o.correctAnswer === 'string' ? o.correctAnswer : undefined,
       order: o.order,
+      ...(information ? { information } : {}),
     });
   }
   return out;
@@ -148,7 +167,7 @@ export async function listQuizzes(_req: AuthRequest, res: Response, next: NextFu
 
 export async function getQuiz(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = parseQuizIdParam(req.params.id);
     const row = queryOne<QuizRow>('SELECT * FROM quizzes WHERE id = ?', [id]);
     if (!row) {
       throw new AppError('Quiz not found', 404, ErrorCodes.NOT_FOUND);
@@ -172,6 +191,10 @@ export async function createQuiz(req: AuthRequest, res: Response, next: NextFunc
     const questions = validateQuestions(body.questions);
     const description =
       body.description !== undefined && body.description !== null ? String(body.description).trim() : null;
+    const information =
+      body.information !== undefined && body.information !== null && String(body.information).trim() !== ''
+        ? String(body.information).trim()
+        : null;
     const courseId =
       body.courseId !== undefined && body.courseId !== null && String(body.courseId).trim() !== ''
         ? String(body.courseId).trim()
@@ -191,9 +214,9 @@ export async function createQuiz(req: AuthRequest, res: Response, next: NextFunc
     }
 
     execute(
-      `INSERT INTO quizzes (id, title, description, course_id, passing_score, questions)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, title, description, courseId, passingScore, JSON.stringify(questions)]
+      `INSERT INTO quizzes (id, title, description, information, course_id, passing_score, questions)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, title, description, information, courseId, passingScore, JSON.stringify(questions)]
     );
 
     const row = queryOne<QuizRow>('SELECT * FROM quizzes WHERE id = ?', [id]);
@@ -212,7 +235,7 @@ export async function createQuiz(req: AuthRequest, res: Response, next: NextFunc
 
 export async function updateQuiz(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = parseQuizIdParam(req.params.id);
     const existing = queryOne<QuizRow>('SELECT * FROM quizzes WHERE id = ?', [id]);
     if (!existing) {
       throw new AppError('Quiz not found', 404, ErrorCodes.NOT_FOUND);
@@ -233,6 +256,14 @@ export async function updateQuiz(req: AuthRequest, res: Response, next: NextFunc
     if (body.description !== undefined) {
       updates.push('description = ?');
       params.push(body.description != null ? String(body.description).trim() : null);
+    }
+    if (body.information !== undefined) {
+      updates.push('information = ?');
+      params.push(
+        body.information != null && String(body.information).trim() !== ''
+          ? String(body.information).trim()
+          : null
+      );
     }
     if (body.courseId !== undefined) {
       updates.push('course_id = ?');
@@ -275,7 +306,7 @@ export async function updateQuiz(req: AuthRequest, res: Response, next: NextFunc
 
 export async function deleteQuiz(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = parseQuizIdParam(req.params.id);
     const existing = queryOne<{ id: string }>('SELECT id FROM quizzes WHERE id = ?', [id]);
     if (!existing) {
       throw new AppError('Quiz not found', 404, ErrorCodes.NOT_FOUND);
@@ -310,7 +341,7 @@ export async function getCompletionsForUser(req: AuthRequest, res: Response, nex
 
 export async function getCompletion(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { id: quizId } = req.params;
+    const quizId = parseQuizIdParam(req.params.id);
     const userId = req.query.userId as string | undefined;
     if (!userId || typeof userId !== 'string' || userId.trim() === '') {
       throw new AppError('userId query parameter is required', 400, ErrorCodes.VALIDATION_ERROR);
@@ -337,7 +368,7 @@ export async function submitQuiz(req: AuthRequest, res: Response, next: NextFunc
       throw new AppError('Authentication required', 401, ErrorCodes.UNAUTHORIZED);
     }
 
-    const { id: quizId } = req.params;
+    const quizId = parseQuizIdParam(req.params.id);
     const answersRaw = (req.body || {}) as Record<string, unknown>;
     const answers = answersRaw.answers;
     if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {

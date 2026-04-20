@@ -13,6 +13,7 @@
     "db:seed": "tsx src/scripts/seedUsers.ts",
     "db:promote-admin": "tsx src/scripts/promoteUserToAdmin.ts",
     "db:seed-courses": "tsx src/scripts/seedCourses.ts",
+    "db:seed-solana": "tsx src/scripts/seedSolanaCrashCourse.ts",
     "db:seed-students": "tsx src/scripts/seedStudentsWithCourses.ts",
     "db:migrate": "tsx src/scripts/migrateDocuments.ts",
     "db:migrate-profile": "tsx src/scripts/migrateProfile.ts",
