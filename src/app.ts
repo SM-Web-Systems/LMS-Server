@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -25,6 +25,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Honor X-Forwarded-* when deployed behind a reverse proxy (needed for correct IP-based rate limits).
+if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
 
 // Security headers
 app.use(helmet());
@@ -61,48 +66,69 @@ app.use(cors({
   credentials: true,
 }));
 
-/** General API cap per IP (window below). In dev, HMR + React Strict Mode + many routes can burn through a low cap quickly. */
+/** General API cap per IP per window (15 min). Override with API_RATE_LIMIT_MAX. */
 function readApiRateLimitMax(): number {
   const raw = process.env.API_RATE_LIMIT_MAX;
   if (raw != null && raw !== '') {
     const n = Number.parseInt(raw, 10);
     if (Number.isFinite(n) && n > 0) return n;
   }
-  return isDev ? 10_000 : 100;
+  // Dev: high enough for HMR + React Strict Mode, but not effectively unlimited.
+  return isDev ? 2000 : 100;
 }
 
+/** Auth routes cap per IP per window. Override with AUTH_RATE_LIMIT_MAX. */
 function readAuthRateLimitMax(): number {
   const raw = process.env.AUTH_RATE_LIMIT_MAX;
   if (raw != null && raw !== '') {
     const n = Number.parseInt(raw, 10);
     if (Number.isFinite(n) && n > 0) return n;
   }
-  return isDev ? 500 : 20;
+  return isDev ? 120 : 20;
 }
 
+const apiWindowMs = 15 * 60 * 1000;
+const apiMax = readApiRateLimitMax();
+const authMax = readAuthRateLimitMax();
+
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: readApiRateLimitMax(),
+  windowMs: apiWindowMs,
+  max: apiMax,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later' } },
 });
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: readAuthRateLimitMax(),
+  windowMs: apiWindowMs,
+  max: authMax,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many login attempts, please try again later' } },
 });
 
+if (process.env.NODE_ENV !== 'test') {
+  const mins = apiWindowMs / 60_000;
+  console.log(
+    `⏱️  Rate limits: API ${apiMax} req / ${mins} min per IP, auth ${authMax} / ${mins} min per IP` +
+      (app.get('trust proxy') ? ' (trust proxy on)' : '')
+  );
+}
+
 // Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint (no rate limit)
-app.get('/health', (_req, res) => {
+function sendHealthJson(res: Response): void {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+}
+
+// Health checks (no rate limit). Use /health for bare-metal probes; /api/v1/health matches the API prefix (e.g. some gateways).
+app.get('/health', (_req, res) => {
+  sendHealthJson(res);
+});
+app.get('/api/v1/health', (_req, res) => {
+  sendHealthJson(res);
 });
 
 // API routes
