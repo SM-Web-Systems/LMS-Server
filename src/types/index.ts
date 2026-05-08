@@ -174,6 +174,8 @@ export interface ForumTopicResponse {
   id: string;
   title: string;
   body: string;
+  /** null / undefined = General channel */
+  courseId?: string | null;
   author: ForumAuthor;
   createdAt: string;
   updatedAt?: string;

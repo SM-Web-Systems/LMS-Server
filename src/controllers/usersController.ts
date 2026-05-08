@@ -35,6 +35,33 @@ export async function getMyCourses(req: AuthRequest, res: Response, next: NextFu
   }
 }
 
+export async function getUser(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const row = queryOne<{ id: string; name: string; email: string; role: string }>(
+      'SELECT id, name, email, role FROM users WHERE id = ?',
+      [id]
+    );
+    if (!row) {
+      throw new AppError('User not found', 404, ErrorCodes.NOT_FOUND);
+    }
+    // Only expose email to the user themselves or admins
+    const caller = req.user;
+    const exposedEmail = caller?.userId === id || caller?.role === 'admin' ? row.email : undefined;
+    res.json({
+      success: true,
+      data: {
+        id: row.id,
+        displayName: row.name,
+        email: exposedEmail,
+        role: row.role,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getUsers(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const rows = query<{ id: string; name: string; email: string; role: string }>(

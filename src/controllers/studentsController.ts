@@ -154,12 +154,13 @@ export async function createStudent(req: AuthRequest, res: Response, next: NextF
       throw new AppError('Validation failed', 400, ErrorCodes.DUPLICATE_ENTRY, errors);
     }
 
-    // Create student
+    // Create student — also link user_id if a users row with that email already exists
     const id = uuidv4();
+    const existingUser = queryOne<{ id: string }>('SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
     execute(
-      `INSERT INTO students (id, name, email, enrollment_number, department, semester)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, name.trim(), email.toLowerCase(), enrollmentNumber.trim(), department.trim(), semester]
+      `INSERT INTO students (id, user_id, name, email, enrollment_number, department, semester)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, existingUser?.id ?? null, name.trim(), email.toLowerCase(), enrollmentNumber.trim(), department.trim(), semester]
     );
 
     const student = queryOne<Student>('SELECT * FROM students WHERE id = ?', [id]);
@@ -271,6 +272,68 @@ export async function updateStudent(req: AuthRequest, res: Response, next: NextF
     res.json({
       success: true,
       data: toStudentResponse(student!),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /students/import
+ * Body: { students: Array<{ name, email, enrollmentNumber, department, semester }> }
+ * Returns per-row results so the UI can show partial success.
+ */
+export async function importStudents(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rows: Array<{ name: string; email: string; enrollmentNumber: string; department: string; semester: number }> = req.body.students;
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new AppError('No student rows provided', 400, ErrorCodes.VALIDATION_ERROR);
+    }
+    if (rows.length > 500) {
+      throw new AppError('Maximum 500 rows per import', 400, ErrorCodes.VALIDATION_ERROR);
+    }
+
+    const results: Array<{ row: number; status: 'created' | 'skipped'; name: string; email: string; reason?: string }> = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const { name, email, enrollmentNumber, department, semester } = rows[i];
+      const rowNum = i + 1;
+
+      // Basic validation
+      if (!name?.trim() || !email?.includes('@') || !enrollmentNumber?.trim() || !department?.trim() || !semester) {
+        results.push({ row: rowNum, status: 'skipped', name: name ?? '', email: email ?? '', reason: 'Missing or invalid field(s)' });
+        continue;
+      }
+      if (semester < 1 || semester > 8) {
+        results.push({ row: rowNum, status: 'skipped', name, email, reason: 'Semester must be 1–8' });
+        continue;
+      }
+
+      const emailLower = email.toLowerCase().trim();
+      if (queryOne<Student>('SELECT id FROM students WHERE email = ?', [emailLower])) {
+        results.push({ row: rowNum, status: 'skipped', name, email, reason: 'Email already exists' });
+        continue;
+      }
+      if (queryOne<Student>('SELECT id FROM students WHERE enrollment_number = ?', [enrollmentNumber.trim()])) {
+        results.push({ row: rowNum, status: 'skipped', name, email, reason: 'Enrollment number already exists' });
+        continue;
+      }
+
+      const id = uuidv4();
+      const existingUser = queryOne<{ id: string }>('SELECT id FROM users WHERE email = ?', [emailLower]);
+      execute(
+        `INSERT INTO students (id, user_id, name, email, enrollment_number, department, semester)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, existingUser?.id ?? null, name.trim(), emailLower, enrollmentNumber.trim(), department.trim(), Number(semester)]
+      );
+      results.push({ row: rowNum, status: 'created', name, email });
+    }
+
+    const created = results.filter((r) => r.status === 'created').length;
+    res.status(207).json({
+      success: true,
+      data: { created, skipped: results.length - created, results },
     });
   } catch (error) {
     next(error);

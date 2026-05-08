@@ -4,7 +4,8 @@ import {
   getStudent, 
   createStudent, 
   updateStudent, 
-  deleteStudent 
+  deleteStudent,
+  importStudents,
 } from '../controllers/studentsController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 
@@ -22,6 +23,9 @@ router.get('/:id', getStudent);
 
 // POST /students - Create new student
 router.post('/', createStudent);
+
+// POST /students/import - Bulk CSV import
+router.post('/import', importStudents);
 
 // PUT /students/:id - Update student
 router.put('/:id', updateStudent);

@@ -30,6 +30,7 @@ function rowToTopic(row: {
   id: string;
   title: string;
   body: string;
+  course_id?: string | null;
   author_id: string;
   created_at: string;
   updated_at: string;
@@ -43,6 +44,7 @@ function rowToTopic(row: {
     id: row.id,
     title: row.title,
     body: row.body,
+    courseId: row.course_id ?? null,
     author: {
       id: row.author_id,
       name: row.author_name,
@@ -82,12 +84,17 @@ function rowToPost(row: {
   };
 }
 
-export async function getTopics(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+export async function getTopics(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
+    // ?courseId=<id> for a specific course channel; ?courseId=general (or omitted) for the general channel
+    const rawCourseId = req.query.courseId as string | undefined;
+    const filterGeneral = !rawCourseId || rawCourseId === 'general';
+
     const rows = query<{
       id: string;
       title: string;
       body: string;
+      course_id: string | null;
       author_id: string;
       created_at: string;
       updated_at: string;
@@ -97,13 +104,15 @@ export async function getTopics(_req: AuthRequest, res: Response, next: NextFunc
       post_count: number;
       last_post_at: string | null;
     }>(
-      `SELECT t.id, t.title, t.body, t.author_id, t.created_at, t.updated_at,
+      `SELECT t.id, t.title, t.body, t.course_id, t.author_id, t.created_at, t.updated_at,
               u.name AS author_name, u.email AS author_email, u.role AS author_role,
               (SELECT COUNT(*) FROM forum_posts WHERE topic_id = t.id) AS post_count,
               (SELECT MAX(created_at) FROM forum_posts WHERE topic_id = t.id) AS last_post_at
        FROM forum_topics t
        JOIN users u ON t.author_id = u.id
-       ORDER BY COALESCE((SELECT MAX(created_at) FROM forum_posts WHERE topic_id = t.id), t.updated_at) DESC`
+       WHERE ${filterGeneral ? 't.course_id IS NULL' : 't.course_id = ?'}
+       ORDER BY COALESCE((SELECT MAX(created_at) FROM forum_posts WHERE topic_id = t.id), t.updated_at) DESC`,
+      filterGeneral ? [] : [rawCourseId]
     );
 
     const topics = rows.map(rowToTopic);
@@ -124,6 +133,7 @@ export async function getTopic(req: AuthRequest, res: Response, next: NextFuncti
       id: string;
       title: string;
       body: string;
+      course_id: string | null;
       author_id: string;
       created_at: string;
       updated_at: string;
@@ -133,7 +143,7 @@ export async function getTopic(req: AuthRequest, res: Response, next: NextFuncti
       post_count: number;
       last_post_at: string | null;
     }>(
-      `SELECT t.id, t.title, t.body, t.author_id, t.created_at, t.updated_at,
+      `SELECT t.id, t.title, t.body, t.course_id, t.author_id, t.created_at, t.updated_at,
               u.name AS author_name, u.email AS author_email, u.role AS author_role,
               (SELECT COUNT(*) FROM forum_posts WHERE topic_id = t.id) AS post_count,
               (SELECT MAX(created_at) FROM forum_posts WHERE topic_id = t.id) AS last_post_at
@@ -201,7 +211,7 @@ export async function createTopic(req: AuthRequest, res: Response, next: NextFun
       throw new AppError('Authentication required', 401, ErrorCodes.UNAUTHORIZED);
     }
 
-    const { title, body } = req.body;
+    const { title, body, courseId } = req.body;
     const errors: Array<{ field: string; message: string }> = [];
 
     if (title === undefined || title === null || String(title).trim() === '') {
@@ -214,6 +224,19 @@ export async function createTopic(req: AuthRequest, res: Response, next: NextFun
       throw new AppError('Validation failed', 400, ErrorCodes.VALIDATION_ERROR, errors);
     }
 
+    // Validate courseId if provided (must be an existing course)
+    const resolvedCourseId: string | null =
+      courseId && String(courseId).trim() !== '' && courseId !== 'general'
+        ? String(courseId).trim()
+        : null;
+
+    if (resolvedCourseId) {
+      const courseExists = queryOne<{ id: string }>('SELECT id FROM courses WHERE id = ?', [resolvedCourseId]);
+      if (!courseExists) {
+        throw new AppError('Course not found', 404, ErrorCodes.NOT_FOUND);
+      }
+    }
+
     const author = queryOne<User>('SELECT id, name, email, role FROM users WHERE id = ?', [userId]);
     if (!author) {
       throw new AppError('User not found', 401, ErrorCodes.UNAUTHORIZED);
@@ -221,18 +244,19 @@ export async function createTopic(req: AuthRequest, res: Response, next: NextFun
 
     const id = uuidv4();
     execute(
-      `INSERT INTO forum_topics (id, title, body, author_id) VALUES (?, ?, ?, ?)`,
-      [id, String(title).trim(), String(body).trim(), userId]
+      `INSERT INTO forum_topics (id, title, body, author_id, course_id) VALUES (?, ?, ?, ?, ?)`,
+      [id, String(title).trim(), String(body).trim(), userId, resolvedCourseId]
     );
 
     const row = queryOne<{
       id: string;
       title: string;
       body: string;
+      course_id: string | null;
       author_id: string;
       created_at: string;
       updated_at: string;
-    }>('SELECT id, title, body, author_id, created_at, updated_at FROM forum_topics WHERE id = ?', [id]);
+    }>('SELECT id, title, body, course_id, author_id, created_at, updated_at FROM forum_topics WHERE id = ?', [id]);
     if (!row) {
       throw new AppError('Failed to create topic', 500, ErrorCodes.INTERNAL_ERROR);
     }
@@ -241,6 +265,7 @@ export async function createTopic(req: AuthRequest, res: Response, next: NextFun
       id: row.id,
       title: row.title,
       body: row.body,
+      courseId: row.course_id ?? null,
       author: toAuthor(author),
       createdAt: toISO(row.created_at)!,
       updatedAt: toISO(row.updated_at) ?? undefined,

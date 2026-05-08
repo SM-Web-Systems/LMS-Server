@@ -181,6 +181,77 @@ export async function getMessages(req: AuthRequest, res: Response, next: NextFun
   }
 }
 
+export async function getUnreadCount(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('Authentication required', 401, ErrorCodes.UNAUTHORIZED);
+    }
+
+    // Count conversations that have messages from the OTHER participant newer than last read
+    const row = queryOne<{ count: number }>(
+      `SELECT COUNT(*) AS count
+       FROM conversations c
+       WHERE (c.user1_id = ? OR c.user2_id = ?)
+         AND (
+           -- at least one message not sent by me
+           EXISTS (
+             SELECT 1 FROM conversation_messages m
+             WHERE m.conversation_id = c.id AND m.sender_id != ?
+           )
+         )
+         AND (
+           -- never read this conversation
+           NOT EXISTS (SELECT 1 FROM conversation_reads r WHERE r.user_id = ? AND r.conversation_id = c.id)
+           OR
+           -- last read before the most recent message from the other person
+           (
+             SELECT MAX(m2.created_at) FROM conversation_messages m2
+             WHERE m2.conversation_id = c.id AND m2.sender_id != ?
+           ) > (
+             SELECT r2.last_read_at FROM conversation_reads r2
+             WHERE r2.user_id = ? AND r2.conversation_id = c.id
+           )
+         )`,
+      [userId, userId, userId, userId, userId, userId]
+    );
+
+    res.json({ success: true, data: { count: row?.count ?? 0 } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function markConversationRead(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('Authentication required', 401, ErrorCodes.UNAUTHORIZED);
+    }
+
+    const { id: conversationId } = req.params;
+    const conv = queryOne<{ user1_id: string; user2_id: string }>(
+      'SELECT user1_id, user2_id FROM conversations WHERE id = ?',
+      [conversationId]
+    );
+    if (!conv || !assertParticipant(conv, userId)) {
+      throw new AppError('Conversation not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    const now = new Date().toISOString();
+    execute(
+      `INSERT INTO conversation_reads (user_id, conversation_id, last_read_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(user_id, conversation_id) DO UPDATE SET last_read_at = excluded.last_read_at`,
+      [userId, conversationId, now]
+    );
+
+    res.json({ success: true, data: { lastReadAt: now } });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function postMessage(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const userId = req.user?.userId;

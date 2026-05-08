@@ -53,6 +53,121 @@ function ensureClerkUserIdColumn(): void {
 }
 ensureClerkUserIdColumn();
 
+function ensureAnnouncementsTable(): void {
+  const has = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='announcements'")
+    .get();
+  if (!has) {
+    db.exec(`
+      CREATE TABLE announcements (
+        id         TEXT PRIMARY KEY,
+        title      TEXT NOT NULL,
+        body       TEXT NOT NULL,
+        scope      TEXT NOT NULL DEFAULT 'general' CHECK (scope IN ('general', 'course')),
+        course_id  TEXT REFERENCES courses(id) ON DELETE CASCADE,
+        author_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        pinned     INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_announcements_scope    ON announcements(scope);
+      CREATE INDEX IF NOT EXISTS idx_announcements_course   ON announcements(course_id);
+      CREATE INDEX IF NOT EXISTS idx_announcements_created  ON announcements(created_at DESC);
+    `);
+  }
+}
+ensureAnnouncementsTable();
+
+function ensureUserProfilesTable(): void {
+  const has = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_profiles'")
+    .get();
+  if (!has) {
+    db.exec(`
+      CREATE TABLE user_profiles (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        avatar_path  TEXT,
+        whatsapp     TEXT,
+        telegram     TEXT,
+        linkedin_url TEXT,
+        github_url   TEXT,
+        twitter_url  TEXT,
+        website_url  TEXT,
+        custom_links TEXT DEFAULT '[]',
+        updated_at   TEXT DEFAULT (datetime('now'))
+      )
+    `);
+  } else {
+    const cols = db.prepare('PRAGMA table_info(user_profiles)').all() as { name: string }[];
+    const addCol = (col: string, def: string) => {
+      if (!cols.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE user_profiles ADD COLUMN ${col} ${def}`);
+      }
+    };
+    addCol('avatar_path', 'TEXT');
+    addCol('whatsapp', 'TEXT');
+    addCol('telegram', 'TEXT');
+    addCol('linkedin_url', 'TEXT');
+    addCol('github_url', 'TEXT');
+    addCol('twitter_url', 'TEXT');
+    addCol('website_url', 'TEXT');
+    addCol('custom_links', "TEXT DEFAULT '[]'");
+  }
+}
+ensureUserProfilesTable();
+
+function ensureCourseInvitesTable(): void {
+  const has = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='course_invites'")
+    .get();
+  if (!has) {
+    db.exec(`
+      CREATE TABLE course_invites (
+        id TEXT PRIMARY KEY,
+        course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
+        created_at TEXT DEFAULT (datetime('now')),
+        expires_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_course_invites_course ON course_invites(course_id);
+      CREATE INDEX IF NOT EXISTS idx_course_invites_email ON course_invites(email);
+      CREATE INDEX IF NOT EXISTS idx_course_invites_token ON course_invites(token);
+    `);
+  }
+}
+ensureCourseInvitesTable();
+
+function ensureConversationReadsTable(): void {
+  const has = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_reads'")
+    .get();
+  if (!has) {
+    db.exec(`
+      CREATE TABLE conversation_reads (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        last_read_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, conversation_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_conv_reads_user ON conversation_reads(user_id);
+    `);
+  }
+}
+ensureConversationReadsTable();
+
+function ensureForumTopicCourseIdColumn(): void {
+  const has = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='forum_topics'").get();
+  if (!has) return;
+  const cols = db.prepare('PRAGMA table_info(forum_topics)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'course_id')) {
+    db.exec('ALTER TABLE forum_topics ADD COLUMN course_id TEXT NULL REFERENCES courses(id) ON DELETE SET NULL');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_forum_topics_course_id ON forum_topics(course_id)');
+  }
+}
+ensureForumTopicCourseIdColumn();
+
 function ensureQuizInformationColumn(): void {
   const has = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='quizzes'").get();
   if (!has) return;

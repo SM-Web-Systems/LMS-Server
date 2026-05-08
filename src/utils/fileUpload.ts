@@ -21,7 +21,7 @@ const SUBMISSION_MIME_TYPES = [
   'text/plain',
 ];
 
-// Allowed MIME types for course documents (includes images)
+// Allowed MIME types for course documents (includes images and presentations)
 const DOCUMENT_MIME_TYPES = [
   'application/pdf',
   'application/msword',
@@ -31,6 +31,10 @@ const DOCUMENT_MIME_TYPES = [
   'image/png',
   'image/jpeg',
   'image/gif',
+  // PowerPoint
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
 ];
 
 // Extension map for MIME types
@@ -43,6 +47,9 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
   'image/gif': '.gif',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.openxmlformats-officedocument.presentationml.slideshow': '.ppsx',
 };
 
 // Ensure upload directory exists
@@ -93,7 +100,7 @@ const documentFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
     cb(null, true);
   } else {
     cb(new AppError(
-      'Invalid file type. Allowed types: PDF, DOC, DOCX, ZIP, TXT, PNG, JPG, GIF',
+      'Invalid file type. Allowed types: PDF, DOC, DOCX, ZIP, TXT, PNG, JPG, GIF, PPT, PPTX',
       400,
       ErrorCodes.INVALID_FILE_TYPE
     ));

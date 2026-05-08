@@ -114,7 +114,7 @@ function scoreSubmission(questions: QuizQuestion[], answers: Record<string, stri
     const submitted = answers[q.id];
     if (submitted === undefined || String(submitted).trim() === '') continue;
     const s = String(submitted).trim();
-    if (q.type === 'multiple_choice' && q.options && typeof q.correctIndex === 'number') {
+    if ((q.type === 'multiple_choice' || q.type === 'flashcard') && q.options && typeof q.correctIndex === 'number') {
       const expected = q.options[q.correctIndex];
       if (expected !== undefined && s === String(expected).trim()) correct++;
     } else if (q.type === 'short_answer' && q.correctAnswer != null && String(q.correctAnswer).trim() !== '') {
