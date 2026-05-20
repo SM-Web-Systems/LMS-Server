@@ -53,6 +53,19 @@ function ensureClerkUserIdColumn(): void {
 }
 ensureClerkUserIdColumn();
 
+/** Profile API selects users.description — ensure column exists on older databases. */
+function ensureUsersDescriptionColumn(): void {
+  const hasUsers = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+    .get();
+  if (!hasUsers) return;
+  const cols = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'description')) {
+    db.exec('ALTER TABLE users ADD COLUMN description TEXT');
+  }
+}
+ensureUsersDescriptionColumn();
+
 function ensureAnnouncementsTable(): void {
   const has = db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='announcements'")

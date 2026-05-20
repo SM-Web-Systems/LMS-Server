@@ -108,17 +108,20 @@ export async function patchProfile(req: AuthRequest, res: Response, next: NextFu
     if (!user) throw new AppError('User not found', 404, ErrorCodes.NOT_FOUND);
 
     const {
-      name, description,
+      name,
+      description,
       whatsapp, telegram,
       linkedinUrl, githubUrl, twitterUrl, websiteUrl,
       customLinks,
     } = req.body ?? {};
+    // Frontend sends displayName; accept as alias for name
+    const nameField = name !== undefined ? name : (req.body as { displayName?: unknown })?.displayName;
 
     // Update users table
     const userUpdates: string[] = [];
     const userParams: unknown[] = [];
-    if (name !== undefined) {
-      const trimmed = String(name).trim();
+    if (nameField !== undefined) {
+      const trimmed = String(nameField).trim();
       if (!trimmed) throw new AppError('Name cannot be empty', 400, ErrorCodes.VALIDATION_ERROR);
       userUpdates.push('name = ?');
       userParams.push(trimmed);
@@ -165,8 +168,9 @@ export async function patchProfile(req: AuthRequest, res: Response, next: NextFu
     }
 
     const updatedUser = queryOne<UserRow>('SELECT id, name, description FROM users WHERE id = ?', [userId]);
+    if (!updatedUser) throw new AppError('User not found', 404, ErrorCodes.NOT_FOUND);
     const updatedProfile = queryOne<ProfileRow>('SELECT * FROM user_profiles WHERE user_id = ?', [userId]);
-    res.json({ success: true, data: buildProfileResponse(updatedUser!, updatedProfile, getBaseUrl(req)) });
+    res.json({ success: true, data: buildProfileResponse(updatedUser, updatedProfile, getBaseUrl(req)) });
   } catch (error) { next(error); }
 }
 
