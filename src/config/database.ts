@@ -15,6 +15,10 @@ if (!fs.existsSync(dbDir)) {
 
 export let db: DatabaseType = new Database(DB_PATH);
 
+// Wait (instead of throwing "database is locked") when another connection holds
+// a write lock — e.g. concurrent requests, or parallel test workers opening the
+// same file and running startup DDL.
+db.pragma('busy_timeout = 5000');
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -25,7 +29,7 @@ function ensureCourseCodeTables(): void {
     .get();
   if (!hasTable) {
     db.exec(`
-      CREATE TABLE user_course_codes (
+      CREATE TABLE IF NOT EXISTS user_course_codes (
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         course_code TEXT NOT NULL,
         PRIMARY KEY (user_id, course_code)
@@ -72,7 +76,7 @@ function ensureAnnouncementsTable(): void {
     .get();
   if (!has) {
     db.exec(`
-      CREATE TABLE announcements (
+      CREATE TABLE IF NOT EXISTS announcements (
         id         TEXT PRIMARY KEY,
         title      TEXT NOT NULL,
         body       TEXT NOT NULL,
@@ -97,7 +101,7 @@ function ensureUserProfilesTable(): void {
     .get();
   if (!has) {
     db.exec(`
-      CREATE TABLE user_profiles (
+      CREATE TABLE IF NOT EXISTS user_profiles (
         user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         avatar_path  TEXT,
         whatsapp     TEXT,
@@ -135,7 +139,7 @@ function ensureCourseInvitesTable(): void {
     .get();
   if (!has) {
     db.exec(`
-      CREATE TABLE course_invites (
+      CREATE TABLE IF NOT EXISTS course_invites (
         id TEXT PRIMARY KEY,
         course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
         email TEXT NOT NULL,
@@ -158,7 +162,7 @@ function ensureConversationReadsTable(): void {
     .get();
   if (!has) {
     db.exec(`
-      CREATE TABLE conversation_reads (
+      CREATE TABLE IF NOT EXISTS conversation_reads (
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
         last_read_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -190,6 +194,28 @@ function ensureQuizInformationColumn(): void {
   }
 }
 ensureQuizInformationColumn();
+
+/** Read-only preview access: users.access_level ('full' | 'preview'). */
+function ensureUserAccessLevelColumn(): void {
+  const hasUsers = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
+  if (!hasUsers) return;
+  const cols = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'access_level')) {
+    db.exec("ALTER TABLE users ADD COLUMN access_level TEXT NOT NULL DEFAULT 'full'");
+  }
+}
+ensureUserAccessLevelColumn();
+
+/** Marks courses that public preview users may read: courses.is_public_preview. */
+function ensureCourseIsPublicPreviewColumn(): void {
+  const hasCourses = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='courses'").get();
+  if (!hasCourses) return;
+  const cols = db.prepare('PRAGMA table_info(courses)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'is_public_preview')) {
+    db.exec('ALTER TABLE courses ADD COLUMN is_public_preview INTEGER NOT NULL DEFAULT 0');
+  }
+}
+ensureCourseIsPublicPreviewColumn();
 
 export function query<T>(sql: string, params: unknown[] = []): T[] {
   const stmt = db.prepare(sql);

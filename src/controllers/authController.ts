@@ -75,6 +75,7 @@ export async function login(req: AuthRequest, res: Response, next: NextFunction)
           name: user.name,
           email: user.email,
           role: user.role,
+          accessLevel: user.role === 'admin' ? 'full' : user.access_level ?? 'full',
           courseCodes: getUserCourseCodes(user.id),
         },
       },
@@ -144,6 +145,7 @@ export async function googleLogin(req: AuthRequest, res: Response, next: NextFun
           name: user.name,
           email: user.email,
           role: user.role,
+          accessLevel: user.role === 'admin' ? 'full' : user.access_level ?? 'full',
           courseCodes: getUserCourseCodes(user.id),
         },
       },
@@ -168,7 +170,7 @@ export async function getMe(req: AuthRequest, res: Response, next: NextFunction)
     }
 
     const user = queryOne<User>(
-      'SELECT id, name, email, role FROM users WHERE id = ?',
+      'SELECT id, name, email, role, access_level FROM users WHERE id = ?',
       [req.user.userId]
     );
 
@@ -183,6 +185,7 @@ export async function getMe(req: AuthRequest, res: Response, next: NextFunction)
         name: user.name,
         email: user.email,
         role: user.role,
+        accessLevel: user.role === 'admin' ? 'full' : user.access_level ?? 'full',
         courseCodes: getUserCourseCodes(user.id),
       },
     });

@@ -11,7 +11,10 @@ interface CourseRow {
   description: string | null;
   course_code: string;
   sections: string;
+  is_public_preview?: number;
 }
+
+const COURSE_SELECT = 'SELECT id, title, description, course_code, sections, is_public_preview FROM courses';
 
 function getUserCourseCodes(userId: string): string[] {
   const rows = query<{ course_code: string }>(
@@ -50,15 +53,20 @@ function rowToCourse(row: CourseRow): Course {
     description: row.description ?? undefined,
     courseCode: row.course_code,
     sections,
+    isPublicPreview: !!row.is_public_preview,
   };
 }
 
 export async function getCourses(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const isAdmin = req.user?.role === 'admin';
+    const isPreview = req.user?.accessLevel === 'preview' && !isAdmin;
     let rows: CourseRow[];
     if (isAdmin) {
-      rows = query<CourseRow>('SELECT id, title, description, course_code, sections FROM courses ORDER BY title');
+      rows = query<CourseRow>(`${COURSE_SELECT} ORDER BY title`);
+    } else if (isPreview) {
+      // Public preview users only ever see courses explicitly flagged for preview.
+      rows = query<CourseRow>(`${COURSE_SELECT} WHERE is_public_preview = 1 ORDER BY title`);
     } else {
       const userId = req.user?.userId;
       if (!userId) {
@@ -70,7 +78,7 @@ export async function getCourses(req: AuthRequest, res: Response, next: NextFunc
       } else {
         const placeholders = codes.map(() => '?').join(',');
         rows = query<CourseRow>(
-          `SELECT id, title, description, course_code, sections FROM courses WHERE course_code IN (${placeholders}) ORDER BY title`,
+          `${COURSE_SELECT} WHERE course_code IN (${placeholders}) ORDER BY title`,
           codes
         );
       }
@@ -92,11 +100,17 @@ export async function getCourse(req: AuthRequest, res: Response, next: NextFunct
     const { id } = req.params;
     const userId = req.user?.userId;
     const isAdmin = req.user?.role === 'admin';
-    const row = queryOne<CourseRow>('SELECT id, title, description, course_code, sections FROM courses WHERE id = ?', [id]);
+    const isPreview = req.user?.accessLevel === 'preview' && !isAdmin;
+    const row = queryOne<CourseRow>(`${COURSE_SELECT} WHERE id = ?`, [id]);
     if (!row) {
       throw new AppError('Course not found', 404, ErrorCodes.NOT_FOUND);
     }
-    if (!isAdmin && userId) {
+    if (isPreview) {
+      // Preview users may only read courses flagged for public preview.
+      if (!row.is_public_preview) {
+        throw new AppError('You do not have access to this course', 403, ErrorCodes.FORBIDDEN);
+      }
+    } else if (!isAdmin && userId) {
       const codes = getUserCourseCodes(userId);
       if (!codes.includes(row.course_code)) {
         throw new AppError('You do not have access to this course', 403, ErrorCodes.FORBIDDEN);
@@ -147,6 +161,7 @@ function validateCourseForCreate(body: unknown): { course: Course; errors: Array
     description: o?.description != null ? String(o.description).trim() : undefined,
     courseCode,
     sections: sectionsArray,
+    isPublicPreview: o?.isPublicPreview === true,
   };
   return { course, errors };
 }
@@ -168,11 +183,11 @@ export async function createCourse(req: AuthRequest, res: Response, next: NextFu
     }
 
     execute(
-      'INSERT INTO courses (id, title, description, course_code, sections) VALUES (?, ?, ?, ?, ?)',
-      [course.id, course.title, course.description ?? null, course.courseCode, JSON.stringify(course.sections)]
+      'INSERT INTO courses (id, title, description, course_code, sections, is_public_preview) VALUES (?, ?, ?, ?, ?, ?)',
+      [course.id, course.title, course.description ?? null, course.courseCode, JSON.stringify(course.sections), course.isPublicPreview ? 1 : 0]
     );
 
-    const row = queryOne<CourseRow>('SELECT id, title, description, course_code, sections FROM courses WHERE id = ?', [course.id]);
+    const row = queryOne<CourseRow>(`${COURSE_SELECT} WHERE id = ?`, [course.id]);
     if (!row) {
       throw new AppError('Failed to create course', 500, ErrorCodes.INTERNAL_ERROR);
     }
@@ -189,7 +204,7 @@ export async function createCourse(req: AuthRequest, res: Response, next: NextFu
 export async function updateCourse(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-    const existing = queryOne<CourseRow>('SELECT id, title, description, course_code, sections FROM courses WHERE id = ?', [id]);
+    const existing = queryOne<CourseRow>(`${COURSE_SELECT} WHERE id = ?`, [id]);
     if (!existing) {
       throw new AppError('Course not found', 404, ErrorCodes.NOT_FOUND);
     }
@@ -225,16 +240,19 @@ export async function updateCourse(req: AuthRequest, res: Response, next: NextFu
       }
     }
     const sections = o.sections !== undefined ? (o.sections as CourseSection[]) : parseSections(existing.sections);
+    const isPublicPreview =
+      o.isPublicPreview !== undefined ? (o.isPublicPreview === true ? 1 : 0) : existing.is_public_preview ?? 0;
 
-    execute('UPDATE courses SET title = ?, description = ?, course_code = ?, sections = ? WHERE id = ?', [
+    execute('UPDATE courses SET title = ?, description = ?, course_code = ?, sections = ?, is_public_preview = ? WHERE id = ?', [
       title,
       description ?? null,
       courseCode,
       JSON.stringify(sections),
+      isPublicPreview,
       id,
     ]);
 
-    const row = queryOne<CourseRow>('SELECT id, title, description, course_code, sections FROM courses WHERE id = ?', [id]);
+    const row = queryOne<CourseRow>(`${COURSE_SELECT} WHERE id = ?`, [id]);
     res.json({
       success: true,
       data: rowToCourse(row!),

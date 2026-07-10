@@ -74,6 +74,8 @@ A TypeScript/Express backend server for the KanyaCSI Student Management System. 
 
    **Clerk + LMS users:** On first successful Clerk sign-in, the server links by **email** to an existing `users` row (and sets `clerk_user_id`) or creates a **student** user plus a `students` row. Seed admins/students in the DB first if you need a specific role; new Clerk-only sign-ups are **students**.
 
+   **Read-only preview (embedded course access):** Self-provisioned Clerk sign-ups start with `access_level = 'preview'` — read-only visitors who came in through the marketing site's embedded course. Preview users can only read courses flagged `is_public_preview = 1` (`GET /courses`) and are blocked (403) from all writes (submissions, quiz submit, forum, messages). Accepting a course invite (`POST /invites/accept`) promotes them to `access_level = 'full'`. Run `npm run db:migrate-preview` to add the columns on existing databases. When embedding the LMS under the marketing origin, add that origin to both `FRONTEND_URL` (CORS) and `CLERK_AUTHORIZED_PARTIES`.
+
 4. **Initialize the database**
 
    **Option A – SM Web Systems LMS (schema + seed two users)**  

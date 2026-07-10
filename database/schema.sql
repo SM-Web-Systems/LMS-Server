@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('student', 'admin')),
+  -- 'full' = invited student / admin with write access; 'preview' = self-provisioned
+  -- public visitor (read-only course preview from the marketing site).
+  access_level TEXT NOT NULL DEFAULT 'full' CHECK (access_level IN ('full', 'preview')),
   description TEXT,
   clerk_user_id TEXT,
   created_at TEXT DEFAULT (datetime('now')),
@@ -102,7 +105,9 @@ CREATE TABLE IF NOT EXISTS courses (
   title TEXT NOT NULL,
   description TEXT,
   course_code TEXT UNIQUE NOT NULL,
-  sections TEXT NOT NULL DEFAULT '[]'
+  sections TEXT NOT NULL DEFAULT '[]',
+  -- 1 = visible read-only to public 'preview' users (embedded course preview).
+  is_public_preview INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_courses_course_code ON courses(course_code);
 

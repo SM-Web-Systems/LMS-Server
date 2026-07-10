@@ -208,6 +208,8 @@ export async function acceptInvite(req: AuthRequest, res: Response, next: NextFu
         [userId, course.course_code]
       );
     }
+    // Accepting an invite promotes a read-only preview account to a full student.
+    execute("UPDATE users SET access_level = 'full', updated_at = datetime('now') WHERE id = ?", [userId]);
     execute(`UPDATE course_invites SET status = 'accepted' WHERE id = ?`, [invite.id]);
 
     res.json({ success: true, data: { courseId: course.id, courseName: course.title } });

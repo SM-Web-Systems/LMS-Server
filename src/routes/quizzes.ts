@@ -9,7 +9,7 @@ import {
   getCompletion,
   submitQuiz,
 } from '../controllers/quizzesController.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+import { authenticate, authorize, requireFullAccess } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -17,7 +17,7 @@ router.use(authenticate);
 
 router.get('/completions', getCompletionsForUser);
 router.get('/:id/completion', getCompletion);
-router.post('/:id/submit', submitQuiz);
+router.post('/:id/submit', requireFullAccess, submitQuiz);
 
 router.get('/', listQuizzes);
 router.post('/', authorize('admin'), createQuiz);

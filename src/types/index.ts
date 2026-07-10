@@ -3,12 +3,16 @@ import { Request } from 'express';
 // User Types
 export type UserRole = 'student' | 'admin';
 
+/** 'full' = invited student / admin; 'preview' = self-provisioned public visitor (read-only). */
+export type AccessLevel = 'full' | 'preview';
+
 export interface User {
   id: string;
   name: string;
   email: string;
   password_hash: string;
   role: UserRole;
+  access_level?: AccessLevel;
   created_at: Date;
   updated_at: Date;
 }
@@ -18,6 +22,7 @@ export interface UserResponse {
   name: string;
   email: string;
   role: UserRole;
+  accessLevel?: AccessLevel;
   courseCodes?: string[];
 }
 
@@ -96,6 +101,8 @@ export interface JWTPayload {
   email: string;
   role: UserRole;
   studentId?: string;
+  /** Resolved from the DB per request in authenticate(); admins are always 'full'. */
+  accessLevel?: AccessLevel;
 }
 
 // Extended Request Type
@@ -221,6 +228,8 @@ export interface Course {
   description?: string;
   courseCode: string;
   sections: CourseSection[];
+  /** Visible read-only to public preview users. */
+  isPublicPreview?: boolean;
 }
 
 // Messages API Types (BACKEND_UPDATE_REQUIREMENTS)

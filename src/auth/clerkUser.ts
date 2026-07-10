@@ -14,6 +14,7 @@ function buildJwtPayload(user: User): JWTPayload {
     email: user.email,
     role: user.role,
     studentId,
+    accessLevel: user.role === 'admin' ? 'full' : user.access_level ?? 'full',
   };
 }
 
@@ -79,10 +80,12 @@ export async function resolveUserFromClerkSessionToken(sessionToken: string): Pr
     return buildJwtPayload(byEmail);
   }
 
+  // Self-provisioned Clerk users (public visitors from the marketing site) start
+  // as read-only 'preview'. Accepting a course invite upgrades them to 'full'.
   const id = uuidv4();
   execute(
-    'INSERT INTO users (id, name, email, password_hash, role, clerk_user_id) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, name, email, '', 'student', sub]
+    "INSERT INTO users (id, name, email, password_hash, role, access_level, clerk_user_id) VALUES (?, ?, ?, ?, 'student', 'preview', ?)",
+    [id, name, email, '', sub]
   );
   const user = queryOne<User>('SELECT * FROM users WHERE id = ?', [id]);
   if (!user) return null;
@@ -96,10 +99,5 @@ export async function resolveUserFromClerkSessionToken(sessionToken: string): Pr
     [studentId, id, name, email, enrollmentNumber]
   );
 
-  return {
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-    studentId,
-  };
+  return buildJwtPayload(user);
 }
